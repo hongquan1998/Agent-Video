@@ -72,6 +72,17 @@ def hex_rgb(hex_str):
     return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
 
 
+def shade_color(hex_str, factor=0.85):
+    """Làm tối hoặc sáng nhẹ màu hex/rgb để tạo phân lớp chiều sâu thị giác (z-depth)."""
+    if isinstance(hex_str, (tuple, list)):
+        r, g, b = hex_str[:3]
+    else:
+        r, g, b = hex_rgb(hex_str)
+    return (max(0.0, min(1.0, r * factor)),
+            max(0.0, min(1.0, g * factor)),
+            max(0.0, min(1.0, b * factor)))
+
+
 def safe_scale(ctx, sx, sy):
     """Kẹp giá trị scale >= 0.05 nhưng giữ nguyên dấu âm/dương (hỗ trợ flip_x/flip_y)."""
     safe_x = math.copysign(max(0.05, abs(sx)), sx)
@@ -79,17 +90,23 @@ def safe_scale(ctx, sx, sy):
     ctx.scale(safe_x, safe_y)
 
 
-def stroke_and_fill(ctx, fill_hex=None, stroke_hex="#12171C", lw=2.6, alpha=1.0):
+def stroke_and_fill(ctx, fill_hex=None, stroke_hex="#12171C", lw=1.8, alpha=1.0):
     """Tô màu mảng phẳng (flat fill) và vẽ viền bo tròn chuẩn vector 2D."""
     if fill_hex is not None:
-        r, g, b = hex_rgb(fill_hex) if isinstance(fill_hex, str) else fill_hex
+        if isinstance(fill_hex, str):
+            r, g, b = hex_rgb(fill_hex)
+        else:
+            r, g, b = fill_hex[:3]
         ctx.set_source_rgba(r, g, b, alpha)
         if stroke_hex is not None and lw > 0:
             ctx.fill_preserve()
         else:
             ctx.fill()
     if stroke_hex is not None and lw > 0:
-        sr, sg, sb = hex_rgb(stroke_hex) if isinstance(stroke_hex, str) else stroke_hex
+        if isinstance(stroke_hex, str):
+            sr, sg, sb = hex_rgb(stroke_hex)
+        else:
+            sr, sg, sb = stroke_hex[:3]
         ctx.set_source_rgba(sr, sg, sb, alpha)
         ctx.set_line_width(lw)
         ctx.set_line_join(cairo.LINE_JOIN_ROUND)
@@ -122,23 +139,47 @@ def draw_pivot_marker(ctx, radius=3.2):
     ctx.restore()
 
 
-def draw_capsule_limb(ctx, length, r_top, r_bot=None, fill_hex="#4D5D66", accent_hex=None):
+def draw_capsule_limb(ctx, length, r_top, r_bot=None, fill_hex="#4D5D66", accent_hex=None, is_child=False, is_terminal=False, lw=1.8):
     """
-    Vẽ một đốt xương hình viên nang hoặc hình thang bo tròn 2 đầu.
-    Tâm xoay (0, 0) nằm chính xác tại tâm khớp trên. Khớp dưới nằm tại (0, length).
+    Vẽ một đốt xương hình viên nang phẳng hoàn toàn không vết nối (Seamless Limb):
+    - Nếu là đốt cha (is_child=False): Vẽ capsule chuẩn với outline tinh tế lw=1.8.
+    - Nếu là đốt con (is_child=True): Fill capsule + patch tròn che khớp tại (0, 0) xóa sạch vết cắt
+      bên trong của đốt cha, chỉ viền 2 bên sườn nối tiếp mượt mà.
+    - accent_hex: Đã loại bỏ việc vẽ khớp tròn thô kệch, giữ tính tương thích tham số.
     """
     if r_bot is None:
         r_bot = r_top
-    ctx.new_sub_path()
-    ctx.arc(0, 0, r_top, math.pi, 0)
-    ctx.arc(0, length, r_bot, 0, math.pi)
-    ctx.close_path()
-    stroke_and_fill(ctx, fill_hex, PALETTE["outline"], lw=2.6)
 
-    if accent_hex is not None:
+    outline_col = PALETTE.get("outline", "#12171C")
+
+    if is_child:
+        # 1. Fill thân đốt con
         ctx.new_sub_path()
-        ctx.arc(0, length * 0.45, max(2.0, r_top * 0.55), 0, 2 * math.pi)
-        stroke_and_fill(ctx, accent_hex, PALETTE["outline"], lw=2.0)
+        ctx.arc(0, 0, r_top, math.pi, 0)
+        ctx.arc(0, length, r_bot, 0, math.pi)
+        ctx.close_path()
+        stroke_and_fill(ctx, fill_hex, None)
+
+        # 2. Xóa sạch vết viền khớp của đốt cha tại tâm xoay (0, 0)
+        ctx.new_sub_path()
+        ctx.arc(0, 0, r_top - lw * 0.35, 0, 2 * math.pi)
+        stroke_and_fill(ctx, fill_hex, None)
+
+        # 3. Viền 2 cạnh sườn mượt mà
+        ctx.new_sub_path()
+        ctx.move_to(-r_top, 0)
+        ctx.line_to(-r_bot, length)
+        ctx.move_to(r_top, 0)
+        ctx.line_to(r_bot, length)
+        if is_terminal:
+            ctx.arc(0, length, r_bot, 0, math.pi)
+        stroke_and_fill(ctx, None, outline_col, lw=lw)
+    else:
+        ctx.new_sub_path()
+        ctx.arc(0, 0, r_top, math.pi, 0)
+        ctx.arc(0, length, r_bot, 0, math.pi)
+        ctx.close_path()
+        stroke_and_fill(ctx, fill_hex, outline_col, lw=lw)
 
     draw_pivot_marker(ctx)
 
@@ -235,176 +276,356 @@ class RigBuilder:
     """Bộ sưu tập hàm tạo Rig tách khớp tái sử dụng cho AI và Python."""
 
     # --------------------------------------------------------------------------
-    # 3.1. NHÂN VẬT CON NGƯỜI (DIVER / EXPLORER / SWIMMER / CIVILIAN / OFFICER / CASUAL)
+    # 3.1. NHÂN VẬT CON NGƯỜI (DIVER / EXPLORER / SWIMMER / CIVILIAN / OFFICER / CASUAL / FORMAL)
     # --------------------------------------------------------------------------
     @staticmethod
-    def build_human_rig(variant="diver"):
+    def build_human_rig(variant="casual"):
         bones = {}
-        if variant == "diver":
-            suit_col = PALETTE["teal_suit"]
-            limb_col = PALETTE["slate_dark"]
-            pants_col = suit_col
-            boot_col = PALETTE["hud_amber"]
-            hand_col = PALETTE["alert_coral"]
-        elif variant == "explorer":
-            suit_col = PALETTE["slate_mid"]
-            limb_col = PALETTE["slate_dark"]
-            pants_col = PALETTE["slate_dark"]
-            boot_col = PALETTE["wood_brown"]
-            hand_col = PALETTE["skin_warm"]
-        elif variant in ("civilian", "casual"):
-            suit_col = PALETTE.get("casual_cream", "#E9ECEF")
-            limb_col = PALETTE.get("skin_warm", "#E2B897")
-            pants_col = PALETTE.get("denim_blue", "#284B63")
-            boot_col = PALETTE["slate_dark"]
-            hand_col = PALETTE["skin_warm"]
+        outline_col = PALETTE.get("outline", "#15191E")
+        skin = PALETTE.get("skin_warm", "#FADBC8")
+        skin_shadow = shade_color(skin, 0.88)
+        hair_dark = PALETTE.get("hair_dark", "#1E1B18")
+        hair_hl = shade_color(hair_dark, 1.45)
+
+        if variant in ("casual", "civilian"):
+            # Phong cách đời thường hiện đại: Áo len camel/sand ấm áp hoặc xám khói, quần denim indigo thanh lịch
+            top_col = "#D4A373" if variant == "casual" else "#E2E8F0"
+            collar_inner = "#FFFFFF" if variant == "casual" else "#1E293B"
+            pants_col = "#1E3A8A" if variant == "casual" else "#1E293B"
+            shoe_main = "#334155"
+            shoe_sole = "#FFFFFF"
+            has_jacket = False
+        elif variant in ("formal", "suit"):
+            # Vest công sở cao cấp
+            top_col = "#1A2536"
+            collar_inner = "#F8FAFC"
+            pants_col = "#1A2536"
+            shoe_main = "#0B0F17"
+            shoe_sole = "#334155"
+            has_jacket = True
         elif variant == "officer":
-            suit_col = PALETTE["slate_dark"]
-            limb_col = PALETTE["slate_dark"]
-            pants_col = PALETTE["slate_dark"]
-            boot_col = PALETTE["outline"]
-            hand_col = PALETTE["skin_warm"]
+            top_col = PALETTE.get("slate_dark", "#1E293B")
+            collar_inner = "#F8FAFC"
+            pants_col = PALETTE.get("slate_dark", "#1E293B")
+            shoe_main = outline_col
+            shoe_sole = "#334155"
+            has_jacket = True
         elif variant == "machinist":
-            suit_col = PALETTE.get("denim_blue", "#284B63")
-            limb_col = PALETTE["skin_warm"]
+            top_col = PALETTE.get("denim_blue", "#284B63")
+            collar_inner = "#F8FAFC"
             pants_col = PALETTE.get("denim_blue", "#284B63")
-            boot_col = PALETTE["wood_brown"]
-            hand_col = PALETTE["skin_warm"]
-        else:
-            suit_col = PALETTE["teal_deep"]
-            limb_col = PALETTE["skin_warm"]
-            pants_col = PALETTE["teal_deep"]
-            boot_col = PALETTE["skin_warm"]
-            hand_col = PALETTE["skin_warm"]
+            shoe_main = PALETTE.get("wood_brown", "#7A5236")
+            shoe_sole = "#334155"
+            has_jacket = False
+        elif variant == "explorer":
+            top_col = PALETTE.get("slate_mid", "#475569")
+            collar_inner = "#334155"
+            pants_col = PALETTE.get("slate_dark", "#334155")
+            shoe_main = PALETTE.get("wood_brown", "#78350F")
+            shoe_sole = "#FFFFFF"
+            has_jacket = True
+        elif variant == "diver":
+            top_col = PALETTE.get("teal_suit", "#164E63")
+            collar_inner = "#083344"
+            pants_col = top_col
+            shoe_main = PALETTE.get("hud_amber", "#F59E0B")
+            shoe_sole = "#D97706"
+            has_jacket = False
+        else: # swimmer
+            top_col = PALETTE.get("teal_deep", "#184E60")
+            collar_inner = skin
+            pants_col = top_col
+            shoe_main = skin
+            shoe_sole = skin
+            has_jacket = False
 
+        # 1. Thân người (Torso & Pelvis)
         def draw_torso(ctx):
-            rounded_rect(ctx, -22, -45, 44, 90, 16)
-            stroke_and_fill(ctx, suit_col, PALETTE["outline"])
-            if variant in ("diver", "explorer", "machinist"):
-                # Đai lưng & túi trang bị
-                rounded_rect(ctx, -24, 24, 48, 12, 4)
-                stroke_and_fill(ctx, PALETTE["slate_dark"], PALETTE["outline"])
-                for bx in (-16, 6):
-                    rounded_rect(ctx, bx, 20, 10, 18, 3)
-                    stroke_and_fill(ctx, PALETTE["alert_coral"], PALETTE["outline"], lw=2.0)
-            elif variant in ("civilian", "casual"):
-                # Cổ áo hiện đại
-                ctx.move_to(-12, -45)
-                ctx.line_to(0, -32)
-                ctx.line_to(12, -45)
-                stroke_and_fill(ctx, None, PALETTE["outline"], lw=2.0)
-            elif variant == "officer":
-                # Nút vàng hải quân
-                for by in (-18, 2, 22):
-                    ctx.arc(0, by, 3.5, 0, 2 * math.pi)
-                    stroke_and_fill(ctx, PALETTE["hud_amber"], PALETTE["outline"], lw=1.2)
-            draw_pivot_marker(ctx)
-
-        def draw_backpack(ctx):
-            if variant == "diver":
-                # Bình dưỡng khí đôi
-                rounded_rect(ctx, -26, -34, 18, 64, 8)
-                stroke_and_fill(ctx, PALETTE["silver_belly"], PALETTE["outline"])
-                rounded_rect(ctx, -26, -22, 18, 12, 2)
-                stroke_and_fill(ctx, PALETTE["hud_amber"], PALETTE["outline"], lw=2.0)
-            elif variant == "explorer":
-                rounded_rect(ctx, -28, -32, 22, 60, 6)
-                stroke_and_fill(ctx, PALETTE["wood_brown"], PALETTE["outline"])
-            elif variant in ("civilian", "casual"):
-                rounded_rect(ctx, -24, -28, 14, 52, 6)
-                stroke_and_fill(ctx, PALETTE["slate_dark"], PALETTE["outline"], lw=1.8)
-            draw_pivot_marker(ctx)
-
-        def draw_head(ctx):
-            # Cổ
-            rounded_rect(ctx, -8, -14, 16, 16, 5)
-            stroke_and_fill(ctx, PALETTE["slate_dark"] if variant in ("diver", "officer") else PALETTE["skin_warm"], PALETTE["outline"])
-            # Đầu / Mũ
+            # A. Vùng mông & hông quần (Pelvis / Seat) nối liền tự nhiên từ eo xuống đùi
             ctx.new_sub_path()
-            ctx.arc(0, -30, 22, 0, 2 * math.pi)
-            stroke_and_fill(ctx, PALETTE["slate_mid"] if variant == "diver" else PALETTE["skin_warm"], PALETTE["outline"])
-            if variant == "diver":
-                # Kính lặn tròn nhìn nghiêng
+            ctx.move_to(-14, -14)
+            ctx.curve_to(-17, -2, -16, 6, -12, 8)
+            ctx.curve_to(-6, 8, -2, 6, 0, 4)
+            ctx.curve_to(6, 4, 10, -4, 11, -14)
+            ctx.close_path()
+            stroke_and_fill(ctx, pants_col, outline_col, lw=1.6)
+
+            # B. Thân áo (Torso / Top) với gấu áo phủ nhẹ qua thắt lưng
+            ctx.new_sub_path()
+            ctx.move_to(-15, -60) # Vai sau
+            ctx.curve_to(-18, -42, -16, -22, -14, -2) # Sống lưng áo
+            ctx.curve_to(-7, 2, 7, 2, 14, -2)        # Gấu áo phủ nhẹ
+            ctx.curve_to(16, -22, 17, -42, 15, -60)    # Ngực trước
+            ctx.line_to(6, -65)   # Vai trước dốc lên cổ
+            ctx.curve_to(2, -67, -2, -67, -6, -65)     # Cổ áo
+            ctx.line_to(-15, -60) # Vai sau
+            ctx.close_path()
+            stroke_and_fill(ctx, top_col, outline_col, lw=1.6)
+
+            if variant in ("formal", "suit"):
+                # Sơ mi + cà vạt + ve áo vest
                 ctx.new_sub_path()
-                ctx.arc(8, -30, 12, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["teal_light"], PALETTE["outline"])
-                ctx.new_sub_path()
-                ctx.arc(11, -33, 4, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["hud_white"], None)
-            elif variant == "explorer":
-                ctx.arc(10, -32, 2.8, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["outline"], None)
-                ctx.move_to(-26, -42)
-                ctx.line_to(26, -42)
-                ctx.curve_to(20, -60, -20, -60, -26, -42)
+                ctx.move_to(-6, -65)
+                ctx.line_to(1, -50)
+                ctx.line_to(7, -65)
                 ctx.close_path()
-                stroke_and_fill(ctx, PALETTE["hud_amber"], PALETTE["outline"])
-            elif variant in ("civilian", "casual"):
-                # Mắt & Tóc vuốt
-                ctx.arc(10, -31, 2.8, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["outline"], None)
+                stroke_and_fill(ctx, collar_inner, outline_col, lw=1.2)
+                # Cà vạt đỏ
                 ctx.new_sub_path()
-                ctx.move_to(-22, -32)
-                ctx.curve_to(-24, -54, 18, -56, 22, -36)
-                ctx.curve_to(14, -44, -10, -42, -22, -32)
+                ctx.move_to(0, -50)
+                ctx.line_to(3, -50)
+                ctx.line_to(4, -20)
+                ctx.line_to(1.5, -14)
+                ctx.line_to(-1, -20)
                 ctx.close_path()
-                stroke_and_fill(ctx, PALETTE.get("hair_dark", "#1F1D1D"), PALETTE["outline"], lw=1.5)
+                stroke_and_fill(ctx, "#991B1B", outline_col, lw=1.2)
+                # Ve áo vest
+                ctx.new_sub_path()
+                ctx.move_to(-14, -60)
+                ctx.line_to(-4, -40)
+                ctx.line_to(-9, -36)
+                ctx.line_to(-4, -18)
+                stroke_and_fill(ctx, None, outline_col, lw=1.3)
+                ctx.new_sub_path()
+                ctx.move_to(14, -60)
+                ctx.line_to(4, -40)
+                ctx.line_to(9, -36)
+                ctx.line_to(4, -18)
+                stroke_and_fill(ctx, None, outline_col, lw=1.3)
             elif variant == "officer":
-                ctx.arc(10, -31, 2.8, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["outline"], None)
-                # Mũ sĩ quan
-                rounded_rect(ctx, -24, -46, 48, 12, 4)
-                stroke_and_fill(ctx, PALETTE["hud_white"], PALETTE["outline"])
-                rounded_rect(ctx, 4, -38, 22, 6, 2)
-                stroke_and_fill(ctx, PALETTE["outline"], None)
+                # Nút vàng hải quân sang trọng
+                for by in (-45, -30, -15):
+                    ctx.new_sub_path()
+                    ctx.arc(0, by, 2.8, 0, 2 * math.pi)
+                    stroke_and_fill(ctx, PALETTE["hud_amber"], outline_col, lw=1.2)
             else:
-                ctx.arc(10, -32, 2.8, 0, 2 * math.pi)
-                stroke_and_fill(ctx, PALETTE["outline"], None)
+                # Cổ áo thun trắng lót trong
+                ctx.new_sub_path()
+                ctx.move_to(-5, -65)
+                ctx.curve_to(-3, -56, 3, -56, 5, -65)
+                ctx.close_path()
+                stroke_and_fill(ctx, collar_inner, outline_col, lw=1.3)
+                if has_jacket:
+                    ctx.new_sub_path()
+                    ctx.move_to(-2.5, -56)
+                    ctx.line_to(-3, -3)
+                    stroke_and_fill(ctx, None, outline_col, lw=1.1)
+                    ctx.new_sub_path()
+                    ctx.move_to(2.5, -56)
+                    ctx.line_to(3, -3)
+                    stroke_and_fill(ctx, None, outline_col, lw=1.1)
             draw_pivot_marker(ctx)
 
-        def draw_foot(ctx):
+        # 2. Đầu & Mặt & Tóc (Head & Neck & Hair)
+        def draw_head(ctx):
+            # Cổ chuẩn giải phẫu (nối từ xương quai hàm cắm sâu vào lồng ngực)
+            ctx.new_sub_path()
+            ctx.move_to(-5.5, -4)
+            ctx.curve_to(-6.0, 4, -7.0, 10, -7.5, 16)
+            ctx.line_to(7.5, 16)
+            ctx.curve_to(6.5, 10, 5.5, 4, 5.0, -4)
+            ctx.close_path()
+            stroke_and_fill(ctx, skin, outline_col, lw=1.5)
+
+            # Bóng đổ cổ dưới cằm
+            ctx.new_sub_path()
+            ctx.move_to(-5.5, -4)
+            ctx.curve_to(0, 2, 2, 2, 5.0, -4)
+            ctx.close_path()
+            stroke_and_fill(ctx, skin_shadow, None)
+
             if variant == "diver":
-                # Chân vịt dài (Swim Fin)
-                ctx.move_to(-6, -4)
-                ctx.line_to(48, 4)
-                ctx.line_to(44, 16)
+                ctx.new_sub_path()
+                ctx.arc(0, -20, 18.0, 0, 2 * math.pi)
+                stroke_and_fill(ctx, "#083344", outline_col, lw=1.8)
+                ctx.new_sub_path()
+                ctx.arc(8, -20, 11, 0, 2 * math.pi)
+                stroke_and_fill(ctx, "#0E7490", outline_col, lw=1.8)
+                ctx.new_sub_path()
+                ctx.arc(8, -20, 7.5, 0, 2 * math.pi)
+                stroke_and_fill(ctx, "#22D3EE", outline_col, lw=1.2)
+                ctx.new_sub_path()
+                ctx.arc(10.5, -23, 2.8, 0, 2 * math.pi)
+                stroke_and_fill(ctx, "#FFFFFF", None)
+                draw_pivot_marker(ctx)
+                return
+
+            # Khuôn mặt
+            ctx.new_sub_path()
+            ctx.arc(0, -20, 17.5, 0, 2 * math.pi)
+            stroke_and_fill(ctx, skin, outline_col, lw=1.6)
+
+            # Tai
+            ctx.new_sub_path()
+            ctx.arc(-7, -19, 3.6, 0, 2 * math.pi)
+            stroke_and_fill(ctx, skin, outline_col, lw=1.3)
+            ctx.new_sub_path()
+            ctx.arc(-7, -19, 1.8, -math.pi/2, math.pi/2)
+            stroke_and_fill(ctx, None, outline_col, lw=1.0)
+
+            # Mũi
+            ctx.new_sub_path()
+            ctx.move_to(15, -21)
+            ctx.curve_to(18.0, -19, 18.0, -17.5, 15.5, -16.5)
+            stroke_and_fill(ctx, None, outline_col, lw=1.4)
+
+            # Mắt có catchlight
+            ctx.new_sub_path()
+            ctx.arc(8.0, -21, 2.2, 0, 2 * math.pi)
+            stroke_and_fill(ctx, outline_col, None)
+            ctx.new_sub_path()
+            ctx.arc(8.8, -22, 0.7, 0, 2 * math.pi)
+            stroke_and_fill(ctx, "#FFFFFF", None)
+
+            # Lông mày
+            ctx.new_sub_path()
+            ctx.move_to(4, -26)
+            ctx.curve_to(7.5, -28, 12, -27, 14, -25)
+            stroke_and_fill(ctx, None, outline_col, lw=1.6)
+
+            # Miệng
+            ctx.new_sub_path()
+            ctx.move_to(9.5, -12)
+            ctx.curve_to(11.5, -11.5, 13, -12.5, 13.5, -13)
+            stroke_and_fill(ctx, None, outline_col, lw=1.3)
+
+            # Má hồng
+            ctx.new_sub_path()
+            ctx.arc(4.5, -15, 2.5, 0, 2 * math.pi)
+            stroke_and_fill(ctx, "#FCA5A5", None, alpha=0.35)
+
+            if variant == "officer":
+                # Mũ sĩ quan chuẩn quân phục
+                rounded_rect(ctx, -18, -42, 38, 11, 3)
+                stroke_and_fill(ctx, PALETTE["hud_white"], outline_col, lw=1.6)
+                rounded_rect(ctx, 4, -34, 18, 5, 2)
+                stroke_and_fill(ctx, outline_col, None)
+            elif variant == "explorer":
+                # Mũ vành dã ngoại
+                ctx.new_sub_path()
+                ctx.move_to(-22, -34)
+                ctx.line_to(22, -34)
+                ctx.curve_to(16, -48, -16, -48, -22, -34)
+                ctx.close_path()
+                stroke_and_fill(ctx, PALETTE["hud_amber"], outline_col, lw=1.6)
+            else:
+                # Tóc nam hiện đại (side-part taper)
+                ctx.new_sub_path()
+                ctx.move_to(-13, -18)
+                ctx.curve_to(-18, -29, -9, -40, 4, -40)
+                ctx.curve_to(15, -40, 20, -34, 18, -24)
+                ctx.curve_to(14, -28, 7, -30, 2, -28)
+                ctx.curve_to(-4, -26, -7, -22, -8, -15)
+                ctx.close_path()
+                stroke_and_fill(ctx, hair_dark, outline_col, lw=1.6)
+
+                # Highlight tóc
+                ctx.new_sub_path()
+                ctx.move_to(-3, -38)
+                ctx.curve_to(3, -39, 9, -38, 13, -34)
+                ctx.curve_to(7, -36, 0, -37, -3, -36)
+                ctx.close_path()
+                stroke_and_fill(ctx, hair_hl, None)
+
+            draw_pivot_marker(ctx)
+
+        # 3. Bàn tay (Hand)
+        def draw_hand(ctx, fill_col):
+            ctx.new_sub_path()
+            ctx.move_to(-3.5, 0)
+            ctx.curve_to(-5, 7, -5, 10, -3.5, 12)
+            ctx.curve_to(-2, 12, -1, 10, -0.8, 8.5)
+            ctx.line_to(1.8, 12.5)
+            ctx.curve_to(3.8, 12.5, 4.2, 10, 3.5, 7.5)
+            ctx.line_to(3.0, 0)
+            ctx.close_path()
+            stroke_and_fill(ctx, fill_col, outline_col, lw=1.3)
+            draw_pivot_marker(ctx)
+
+        # 4. Giày (Shoe / Sneaker)
+        def draw_foot(ctx, is_far=False):
+            f_main = shade_color(shoe_main, 0.8) if is_far else shoe_main
+            f_sole = "#CBD5E1" if is_far else shoe_sole
+
+            if variant == "diver":
+                ctx.new_sub_path()
+                ctx.move_to(-6, -3)
+                ctx.line_to(44, 5)
+                ctx.line_to(40, 16)
                 ctx.line_to(-8, 10)
                 ctx.close_path()
-                stroke_and_fill(ctx, PALETTE["hud_amber"], PALETTE["outline"])
+                stroke_and_fill(ctx, f_main, outline_col, lw=1.8)
             else:
-                rounded_rect(ctx, -8, -4, 28, 16, 6)
-                stroke_and_fill(ctx, boot_col, PALETTE["outline"])
+                ctx.new_sub_path()
+                ctx.move_to(-7, -2)
+                ctx.curve_to(-9, 4, -8, 7, -7, 10)
+                ctx.line_to(20, 10)
+                ctx.curve_to(23, 7, 21, 3, 17, 2)
+                ctx.line_to(7, 1)
+                ctx.curve_to(1, -2, -1, -2, -7, -2)
+                ctx.close_path()
+                stroke_and_fill(ctx, f_main, outline_col, lw=1.5)
+                rounded_rect(ctx, -8, 9, 30, 5.0, 2)
+                stroke_and_fill(ctx, f_sole, outline_col, lw=1.3)
             draw_pivot_marker(ctx)
 
         root = BoneNode("torso", 0, 0, draw_fn=draw_torso, z_index=0)
         bones["torso"] = root
-        bones["backpack"] = root.add_child(BoneNode("backpack", -12, 0, draw_fn=draw_backpack, z_index=-2))
-        bones["head"] = root.add_child(BoneNode("head", 0, -45, draw_fn=draw_head, z_index=1))
+        bones["head"] = root.add_child(BoneNode("head", 2, -66, draw_fn=draw_head, z_index=-1))
 
-        # Lắp 2 tay & 2 chân (L nằm sau thân z=-1, R nằm trước thân z=1)
-        for side, z in [("L", -1), ("R", 1)]:
+        # Chỉ diver hoặc explorer mới đeo bình khí/balo, casual/formal KHÔNG CÓ balo
+        if variant == "diver":
+            def draw_backpack(ctx):
+                rounded_rect(ctx, -24, -30, 16, 56, 7)
+                stroke_and_fill(ctx, "#94A3B8", outline_col, lw=1.6)
+                rounded_rect(ctx, -24, -20, 16, 10, 2)
+                stroke_and_fill(ctx, "#F59E0B", outline_col, lw=1.4)
+                draw_pivot_marker(ctx)
+            bones["backpack"] = root.add_child(BoneNode("backpack", -14, -30, draw_fn=draw_backpack, z_index=-3))
+        elif variant == "explorer":
+            def draw_backpack(ctx):
+                rounded_rect(ctx, -24, -28, 18, 52, 6)
+                stroke_and_fill(ctx, PALETTE["wood_brown"], outline_col, lw=1.6)
+                draw_pivot_marker(ctx)
+            bones["backpack"] = root.add_child(BoneNode("backpack", -14, -30, draw_fn=draw_backpack, z_index=-3))
+
+        # Lắp 2 tay & 2 chân theo tỷ lệ giải phẫu chuẩn
+        # Cánh tay: khuỷu tay ngang eo (y=-18), cổ tay ngang hông (y=18), ngón tay ngang giữa đùi (y=30)
+        # Chân: đùi dài 58px, cẳng chân dài 56px, bàn chân 12px
+        # Chân đặt tại z=-2 (L) và z=-1 (R) để chỏm xoay khớp háng luôn ẩn mượt mà dưới gấu áo và hông quần
+        for side, z_arm, z_leg, is_far in [("L", -2, -2, True), ("R", 2, -1, False)]:
+            arm_col = shade_color(top_col, 0.82) if is_far else top_col
+            leg_col = shade_color(pants_col, 0.82) if is_far else pants_col
+            skin_c  = shade_color(skin, 0.85) if is_far else skin
+
+            px_arm = -2 if is_far else 2
+            px_leg = -2 if is_far else 2
+
             ua = root.add_child(BoneNode(
-                f"arm_upper_{side}", 0, -34, z_index=z,
-                draw_fn=lambda c: draw_capsule_limb(c, 38, 8.5, 7.5, suit_col)
+                f"arm_upper_{side}", px_arm, -60, z_index=z_arm,
+                draw_fn=lambda c, col=arm_col: draw_capsule_limb(c, 42, 7.5, 6.2, col, is_child=False)
             ))
             la = ua.add_child(BoneNode(
-                f"arm_lower_{side}", 0, 38,
-                draw_fn=lambda c: draw_capsule_limb(c, 34, 7.5, 6.5, limb_col)
+                f"arm_lower_{side}", 0, 42,
+                draw_fn=lambda c, col=arm_col: draw_capsule_limb(c, 36, 6.2, 5.0, col, is_child=True, is_terminal=False)
             ))
             hand = la.add_child(BoneNode(
-                f"hand_{side}", 0, 34,
-                draw_fn=lambda c: draw_capsule_limb(c, 12, 6.5, 5.0, hand_col)
+                f"hand_{side}", 0, 36,
+                draw_fn=lambda c, sc=skin_c: draw_hand(c, sc)
             ))
 
             ul = root.add_child(BoneNode(
-                f"leg_upper_{side}", 0, 38, z_index=z,
-                draw_fn=lambda c: draw_capsule_limb(c, 46, 11.0, 9.5, pants_col, PALETTE["slate_dark"])
+                f"leg_upper_{side}", px_leg, 2, z_index=z_leg,
+                draw_fn=lambda c, col=leg_col: draw_capsule_limb(c, 58, 9.5, 8.0, col, is_child=False)
             ))
             ll = ul.add_child(BoneNode(
-                f"leg_lower_{side}", 0, 46,
-                draw_fn=lambda c: draw_capsule_limb(c, 44, 9.0, 7.5, pants_col if variant != "swimmer" else limb_col)
+                f"leg_lower_{side}", 0, 58,
+                draw_fn=lambda c, col=leg_col: draw_capsule_limb(c, 56, 8.0, 6.2, col, is_child=True, is_terminal=False)
             ))
-            foot = ll.add_child(BoneNode(f"foot_{side}", 0, 44, draw_fn=draw_foot))
+            foot = ll.add_child(BoneNode(
+                f"foot_{side}", 0, 56,
+                draw_fn=lambda c, far=is_far: draw_foot(c, far)
+            ))
 
             bones[f"arm_upper_{side}"] = ua
             bones[f"arm_lower_{side}"] = la
@@ -412,8 +633,6 @@ class RigBuilder:
             bones[f"leg_upper_{side}"] = ul
             bones[f"leg_lower_{side}"] = ll
             bones[f"foot_{side}"] = foot
-
-        return ActorRig(f"human_{variant}", root, bones)
 
         return ActorRig(f"human_{variant}", root, bones)
 
@@ -1481,19 +1700,39 @@ class HUDRenderer:
 
     @staticmethod
     def draw_subtitle_box(ctx, W, H, text, font="Segoe UI", font_size=28, text_color="#F4F7F9", bg_alpha=0.82):
-        """Hộp phụ đề nổi bật chuẩn điện ảnh, căn giữa cạnh dưới màn hình."""
+        """Hộp phụ đề nổi bật chuẩn điện ảnh, tự động xuống dòng và căn giữa cạnh dưới màn hình."""
         if not text:
             return
         ctx.save()
         ctx.select_font_face(font, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
         ctx.set_font_size(font_size)
-        x_bear, y_bear, width, height, dx, dy = ctx.text_extents(text)
+
+        max_text_w = W - 180
+        words = text.split()
+        lines = []
+        cur_line = []
+
+        for word in words:
+            test_line = " ".join(cur_line + [word])
+            ext = ctx.text_extents(test_line)
+            if ext[2] > max_text_w and cur_line:
+                lines.append(" ".join(cur_line))
+                cur_line = [word]
+            else:
+                cur_line.append(word)
+        if cur_line:
+            lines.append(" ".join(cur_line))
+
+        line_h = font_size * 1.35
+        line_extents = [ctx.text_extents(ln) for ln in lines]
+        max_line_w = max((ext[2] for ext in line_extents), default=0)
+        total_text_h = len(lines) * line_h
 
         pad_x, pad_y = 36, 16
-        box_w = min(W - 120, width + pad_x * 2)
-        box_h = height + pad_y * 2
+        box_w = max_line_w + pad_x * 2
+        box_h = total_text_h + pad_y * 2
         box_x = (W - box_w) / 2
-        box_y = H - 120 - box_h / 2
+        box_y = H - 110 - box_h
 
         rounded_rect(ctx, box_x, box_y, box_w, box_h, 12)
         ctx.set_source_rgba(0.04, 0.08, 0.12, bg_alpha)
@@ -1503,8 +1742,13 @@ class HUDRenderer:
         ctx.stroke()
 
         ctx.set_source_rgb(*hex_rgb(text_color))
-        ctx.move_to(box_x + pad_x, box_y + pad_y + height)
-        ctx.show_text(text)
+        cur_y = box_y + pad_y + font_size
+        for ln, ext in zip(lines, line_extents):
+            ln_x = box_x + (box_w - ext[2]) / 2
+            ctx.move_to(ln_x, cur_y)
+            ctx.show_text(ln)
+            cur_y += line_h
+
         ctx.restore()
 
     @staticmethod
@@ -1582,6 +1826,8 @@ class SceneRunner:
         "human_swimmer": lambda: RigBuilder.build_human_rig("swimmer"),
         "human_civilian": lambda: RigBuilder.build_human_rig("civilian"),
         "human_casual": lambda: RigBuilder.build_human_rig("casual"),
+        "human_formal": lambda: RigBuilder.build_human_rig("formal"),
+        "human_suit": lambda: RigBuilder.build_human_rig("suit"),
         "human_officer": lambda: RigBuilder.build_human_rig("officer"),
         "human_machinist": lambda: RigBuilder.build_human_rig("machinist"),
         "shark": lambda: RigBuilder.build_shark_rig("shark"),

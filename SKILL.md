@@ -78,8 +78,8 @@ The codebase is organized into clean, reusable modules preserved for future prod
 - **`src/auto_produce.py`**: Turnkey master entry point for automated voice-to-video production with automatic language detection, duration scaling, Storyboard JSON auto-dispatch, and custom script support.
 - **`src/render_tuoi32_animation.py`**: Life reflection & documentary animation script for "Tuổi 32", demonstrating full integration with `assets_library.py`.
 - **`src/localization.py`**: Centralized language dictionary and font mapping for Vietnamese, English, and other languages.
-- **`src/components.py`**: Sargo-class fleet submarine hull, watertight oval door with dogging lugs, multi-layer ocean waves, vignette, and vector primitives.
-- **`src/art_assets.py`**: Lieutenant Oliver Naquin portrait with chiaroscuro rim lighting and emotional expressions, submarine control room, sound-powered bulkhead telephone station, and flooded diesel engine room.
-- **`src/generate_sfx.py`**: Procedural sound design engine synthesizing synchronized SFX layers.
+- **`src/components.py`**: General-purpose 2D vector primitives, cinematic lighting FX (vignette, letterbox, volumetric light cones, floating particles), HUD UI cards & gauges, and parametric structures.
+- **`src/art_assets.py`**: High-end artistic vector assets: Chiaroscuro character portrait engine (custom outfits, expressions, headwear), modular interior environments (control room, modern office, study), interactive hardware terminals, and industrial machinery bays.
+- **`src/generate_sfx.py`**: General-purpose procedural sound design engine (NumPy 44.1kHz Stereo) with synthesis primitives (sine, colored noise, whooshes, impacts, chimes) and multi-theme master audio generator (cinematic_ambient, contemplative, suspense_documentary, industrial).
 - **`src/render_cinematic_animation.py`**: Language-adaptive PyCairo master scene renderer and FFmpeg video pipeline.
 - **`produce.bat` / `produce.ps1`**: Fast one-click launchers for Windows supporting voiceovers, Storyboard JSONs, and custom scripts.
