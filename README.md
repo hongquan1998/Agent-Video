@@ -50,6 +50,7 @@ Toàn bộ tài nguyên và mã nguồn đã được module hóa để tái s�
 
 | Tệp / Thư mục | Vai trò |
 | :--- | :--- |
+| **`src/layout_validator.py`** | **Bộ Kiểm Định Bố Cục & Phông Chữ Tự Động (Pre-Render Quality Gate)**: Tự động chạy trước mọi tiến trình render video. Quét và khử lỗi ký tự lạ Unicode (tránh lỗi ô vuông `[]`), kiểm tra độ rộng văn bản chống tràn khung (`draw_safe_text`), kiểm soát khoảng cách an toàn giữa nhân vật và hộp thoại (tránh che khuất), đồng thời cách ly đường vẽ PyCairo (`ctx.new_sub_path()`) để loại bỏ vệt nối lạ. |
 | **`src/assets_library.py`** | **Thư viện Vector 2D & Chuyển Động Procedural Cốt Lõi**: Hệ thống xương phân cấp (`BoneNode`, `ActorRig`), bộ tạo Rig phong phú (`RigBuilder`: thợ lặn, nhà thám hiểm, nhân vật đời thường, sĩ quan, thú, tàu, cá mập...), bộ giải chuyển động (`ProceduralMotion`: đi bộ, ngồi làm việc, gõ phím, bơi, nói chuyện...), môi trường Parallax (`EnvironmentRenderer`: văn phòng làm việc ấm áp, đường chân trời rực rỡ, mặt cắt đại dương, lưới blueprint, sổ nhật ký...) và các thành phần Infographic HUD (`HUDRenderer`: thước đo tỉ lệ, kính ngắm, gauge đo phần trăm, callout pin, con dấu đóng, phụ đề nổi, bảng tên lower third). Cung cấp `StoryboardRunner` để dựng video từ file JSON mà không cần viết code animation thủ công! |
 | **`src/auto_produce.py`** | **Bộ điều khiển trung tâm tự động hóa**: Nhận file voice và/hoặc file storyboard JSON, đo thời lượng chính xác qua `ffprobe`, tự động chọn ngôn ngữ, kích hoạt tạo SFX, render PyCairo 1080p và xuất file MP4. Hỗ trợ chuyển đổi mượt mà giữa chế độ Storyboard JSON và Script tùy biến. |
 | **`src/render_tuoi32_animation.py`** | **Mẫu kịch bản video hoạt họa "Tuổi 32 - Bước Ngoặt Trưởng Thành"**: Sử dụng 100% tài nguyên từ `assets_library.py`, minh họa rõ nét cách kết hợp phòng làm việc đêm, bản đồ nội lực và sải bước ra chân trời. |
@@ -69,6 +70,7 @@ Toàn bộ tài nguyên và mã nguồn đã được module hóa để tái s�
 3. **Độ phân giải & Tần số quét**: Chuẩn Full HD `1920x1080` ở `30 fps` mượt mà.
 4. **Hòa âm chuẩn Studio**: Tự động cân bằng âm lượng Giọng đọc (Voiceover: 100%) và Hiệu ứng âm thanh (SFX: 62%) để đảm bảo nghe rõ từng lời dẫn mà vẫn giữ được độ kịch tính, hùng tráng.
 5. **Bảo tồn nội dung gốc**: Giữ nguyên 100% kịch bản giọng đọc được cung cấp.
+6. **Kiểm Định Bố Cục & Phông Chữ Tự Động (Pre-Render Quality Gate)**: Quy trình tự động kiểm tra và xử lý toàn bộ lỗi Unicode (ô vuông), tràn viền thẻ, che khuất nhân vật và lỗi nối nét PyCairo trước khi render video, loại bỏ hoàn toàn nhu cầu can thiệp thủ công.
 
 ---
 

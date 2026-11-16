@@ -11,6 +11,7 @@ Tổng hợp âm thanh thuần toán học (NumPy) chất lượng 44.1 kHz Ster
 """
 
 import os
+import math
 import wave
 import numpy as np
 

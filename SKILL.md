@@ -26,6 +26,12 @@ When the user uploads or provides **ANY voiceover audio file** (MP3, WAV, M4A, e
 6. **Natural Anatomical Character Rigging**: Chiaroscuro rim lighting, distinct facial expressions (determination, tension, horror), uniform details (Service Dress Blue coats, lieutenant gold braid, officer combination caps, denim machinist workwear).
 7. **Frame-Accurate Synchronized SFX**: Procedurally synthesized environmental foley (deep ocean swells, diesel idle/cutoff, dual AHOOGA dive klaxons, pocket watch ticks, electrical relays, 80cm valve impact, high-pressure water deluge, brass telephone bells, equipment slide clatter, sub-bass heartbeat).
 8. **Preserve Approved Voiceover**: Maintain 100% fidelity to the provided voiceover narration without rewriting or shortening.
+9. **Automated Pre-Render Typography & Layout Quality Gate (BẮT BUỘC & TỰ ĐỘNG)**:
+   - Hệ thống PHẢI luôn tự động chạy bước kiểm tra và tự khắc phục mọi lỗi hiển thị văn bản và bố cục TRƯỚC KHI kết xuất video, người dùng KHÔNG BAO GIỜ cần phải nhắc nhở hay yêu cầu sửa lỗi thủ công:
+     * **Khử lỗi ô vuông (Tofu Glyphs)**: Tự động phát hiện và ánh xạ các ký tự Unicode lạ (như `✓`, `✗`, biểu tượng icon) sang ký tự chuẩn tương thích 100% với font hệ thống (`•`, `-`, `+`, `->`).
+     * **Chống tràn viền thẻ (Zero Text Overflow)**: Tự động đo độ rộng văn bản (`text_extents`) và kích hoạt ngắt dòng an toàn (`draw_wrapped_text` / `draw_safe_text`), đảm bảo mọi dòng chữ nằm gọn trong thẻ với khoảng đệm an toàn tối thiểu 35px.
+     * **Chống che khuất nhân vật (Zero Collision)**: Tách biệt hoàn toàn tọa độ hiển thị của nhân vật và thẻ thông tin/hộp thoại (khoảng cách tối thiểu >= 150px).
+     * **Cô lập đường vẽ PyCairo (Zero Path Leaking)**: Luôn gọi `ctx.new_sub_path()` trước mọi lệnh `ctx.arc()` để ngăn chặn triệt để hiện tượng vệt nối thẳng vô tình xuất hiện giữa các hình vẽ.
 
 ---
 
@@ -49,13 +55,18 @@ python "d:\Data\Agent Video\src\auto_produce.py" --audio "d:\Data\Agent Video\au
 1. **Audio Probe**: Uses `ffprobe` to determine the exact audio duration down to the millisecond.
 2. **Language Adaptation**: Maps all on-screen titles, HUD callouts, and captions to the detected language via `src/localization.py`.
 3. **SFX Track Generation**: Automatically calls `src/generate_sfx.py` to synthesize a complete synchronized foley/SFX track matching the audio length.
-4. **Keyframe Previews**: Renders 13 high-resolution keyframe preview plates in `d:\Data\Agent Video\output\cinematic_<lang>_preview_*.png` across all narrative beats.
-5. **Video Rendering & Mixing**:
+4. **Automated Typography & Layout Quality Gate (`src/layout_validator.py`)**:
+   - Quét và khử toàn bộ ký tự lạ Unicode gây ô vuông [].
+   - Kiểm tra độ rộng văn bản và kích hoạt ngắt dòng an toàn (`draw_safe_text`), đảm bảo 100% không tràn khung.
+   - Kiểm tra khoảng cách nhân vật và hộp thông tin, ngăn ngừa triệt để sự che khuất.
+   - Kiểm tra cô lập đường vẽ (`ctx.new_sub_path()`), triệt tiêu vệt nối bất thường.
+5. **Keyframe Previews**: Renders high-resolution keyframe preview plates across all narrative beats.
+6. **Video Rendering & Mixing**:
    - Renders 1920x1080 30fps vector frames via PyCairo.
    - Slices Cairo ARGB32 memory directly into FFmpeg `bgr24` stdin stream.
-   - Mixes Voiceover (volume 1.0) with Foley SFX (volume 0.62) using FFmpeg `amix`.
+   - Mixes Voiceover (volume 1.0) with Foley SFX (volume 0.55 - 0.62) using FFmpeg `amix`.
    - Encodes high-bitrate H.264 video (`-crf 18`, `-preset fast`, `-pix_fmt yuv420p`).
-6. **Outputs Final Video**:
+7. **Outputs Final Video**:
    Saves to `d:\Data\Agent Video\output\<voice_name>_<lang>_cinematic.mp4`.
 
 ### Step 4: Verification & Presentation

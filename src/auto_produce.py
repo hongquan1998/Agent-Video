@@ -14,6 +14,7 @@ if CURRENT_DIR not in sys.path:
 from generate_sfx import generate_sfx_track
 from render_cinematic_animation import render_cinematic_video, generate_previews
 from localization import get_font_for_lang, SCENE_LOCALIZATIONS
+from layout_validator import validate_and_audit_scenes, sanitize_text
 from assets_library import (
     StoryboardRunner, render_storyboard_video, generate_storyboard_previews,
     SceneRunner, RigBuilder, ProceduralMotion, EnvironmentRenderer, HUDRenderer
@@ -189,11 +190,20 @@ def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="
         print(f"[+] Default Duration: {duration:.2f} seconds")
 
     # Step 2: Generate Synchronized SFX Track
-    print("\n--- [Step 2/4] Synthesizing Synchronized Foley & Ambiance SFX ---")
+    print("\n--- [Step 2/5] Synthesizing Synchronized Foley & Ambiance SFX ---")
     generate_sfx_track(duration=duration, output_path=sfx_path)
 
-    # Step 3: Generate Preview Keyframe Plates in Target Language
-    print(f"\n--- [Step 3/4] Generating Preview Keyframes ({target_lang.upper()}) ---")
+    # Step 3: Automated Typography & Layout Quality Gate (Pre-Render Validation)
+    print(f"\n--- [Step 3/5] Automated Typography & Layout Quality Gate ({target_lang.upper()}) ---")
+    active_mod = None
+    if script_path:
+        spec = importlib.util.spec_from_file_location("custom_render_module", script_path)
+        active_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(active_mod)
+    validate_and_audit_scenes(active_mod, duration=duration, fps=fps, lang=target_lang, verbose=True)
+
+    # Step 4: Generate Preview Keyframe Plates in Target Language
+    print(f"\n--- [Step 4/5] Generating Preview Keyframes ({target_lang.upper()}) ---")
     if storyboard_path:
         generate_storyboard_previews(storyboard_path, output_dir=output_dir, fps=fps, lang=target_lang)
     elif script_path:
@@ -211,8 +221,8 @@ def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="
         print("\n[Preview Mode] Previews generated. Skipping video encoding.")
         return output_mp4
 
-    # Step 4: Render Full 1080p 30fps Video and Pipe to FFmpeg
-    print(f"\n--- [Step 4/4] Rendering 2D Vector Animation ({target_lang.upper()}) & Piping to FFmpeg ---")
+    # Step 5: Render Full 1080p 30fps Video and Pipe to FFmpeg
+    print(f"\n--- [Step 5/5] Rendering 2D Vector Animation ({target_lang.upper()}) & Piping to FFmpeg ---")
     if storyboard_path:
         final_video = render_storyboard_video(
             storyboard_or_file=storyboard_path,

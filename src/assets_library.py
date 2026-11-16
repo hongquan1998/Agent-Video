@@ -27,6 +27,14 @@ except ImportError:
     def T(key, lang="vi"):
         return key
 
+try:
+    from layout_validator import sanitize_text, wrap_text_to_lines, draw_safe_text
+except ImportError:
+    def sanitize_text(t): return t
+    def wrap_text_to_lines(ctx, t, w, **k): return [t]
+    def draw_safe_text(ctx, t, x, y, **k):
+        ctx.move_to(x, y); ctx.show_text(t)
+
 # ==============================================================================
 # 1. VISUAL DESIGN TOKENS & PRIMITIVE HELPERS
 # ==============================================================================
@@ -1537,6 +1545,16 @@ class HUDRenderer:
     """Các thành phần giao diện kỹ thuật, thước đo tỷ lệ và biểu đồ trực quan."""
 
     @staticmethod
+    def sanitize_text(text):
+        """Khử lỗi ký tự lạ Unicode gây ô vuông []."""
+        return sanitize_text(text)
+
+    @staticmethod
+    def draw_wrapped_text(ctx, text, x, y, max_w, line_height=32, font=None, font_size=None):
+        """Vẽ văn bản an toàn chống tràn viền tuyệt đối."""
+        return draw_safe_text(ctx, text, x, y, max_w=max_w, line_height=line_height, font=font, font_size=font_size)
+
+    @staticmethod
     def spring_pop(t, trigger_t, duration=0.45):
         dt = t - trigger_t
         if dt <= 0:
@@ -1630,10 +1648,12 @@ class HUDRenderer:
     def draw_donut_gauge(ctx, x, y, radius=68, pct=0.75, label="EFFICIENCY", color_hex="#F5C242"):
         ctx.save()
         ctx.translate(x, y)
+        ctx.new_sub_path()
         ctx.arc(0, 0, radius, 0, 2 * math.pi)
         stroke_and_fill(ctx, None, PALETTE["grid_line"], lw=14.0)
 
         end_angle = -math.pi / 2 + max(0.01, min(1.0, pct)) * 2 * math.pi
+        ctx.new_sub_path()
         ctx.arc(0, 0, radius, -math.pi / 2, end_angle)
         stroke_and_fill(ctx, None, color_hex, lw=14.0)
 
@@ -1791,23 +1811,25 @@ class HUDRenderer:
         ctx.translate(x, y)
         safe_scale(ctx, pop, pop)
 
+        ctx.new_sub_path()
         ctx.arc(0, 0, 78, 0, 2 * math.pi)
         stroke_and_fill(ctx, None, PALETTE["hud_amber"], lw=2.4, alpha=0.6)
+        ctx.new_sub_path()
         ctx.arc(0, 0, 68, 0, 2 * math.pi)
         stroke_and_fill(ctx, PALETTE["bg_navy"], PALETTE["hud_white"], lw=3.0, alpha=0.95)
 
         ctx.select_font_face(font, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-        ctx.set_font_size(52)
+        ctx.set_font_size(50)
         ctx.set_source_rgb(*hex_rgb(PALETTE["hud_amber"]))
-        cw = len(str(number_str)) * 26
-        ctx.move_to(-cw / 2, 18)
+        ext_n = ctx.text_extents(str(number_str))
+        ctx.move_to(-ext_n.width / 2, 18)
         ctx.show_text(str(number_str))
 
         if label:
-            ctx.set_font_size(16)
+            ctx.set_font_size(13)
             ctx.set_source_rgb(*hex_rgb(PALETTE["hud_white"]))
-            lw = len(label) * 8.5
-            ctx.move_to(-lw / 2, 50)
+            ext_l = ctx.text_extents(label)
+            ctx.move_to(-ext_l.width / 2, 45)
             ctx.show_text(label)
         ctx.restore()
 
