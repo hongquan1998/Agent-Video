@@ -19,25 +19,41 @@ if not exist "%PYTHON_EXE%" (
 :: Check Input Argument
 if "%~1"=="" (
     echo [ERROR] No audio file provided!
-    echo Usage: produce.bat "path\to\voiceover.mp3" [output.mp4] [lang]
-    echo Example: produce.bat "audio\voice_en.mp3" "output\video.mp4" "en"
+    echo Usage: produce.bat "path\to\voiceover.mp3" [output.mp4] [lang] [storyboard.json]
+    echo Example: produce.bat "audio\voice_en.mp3" "output\video.mp4" "en" "storyboard.json"
     exit /b 1
 )
 
-set "AUDIO_INPUT=%~1"
+set "FIRST_INPUT=%~1"
 set "OUTPUT_MP4=%~2"
 set "LANG_PARAM=%~3"
+set "EXTRA_PARAM=%~4"
 
 if "%LANG_PARAM%"=="" (
     set "LANG_PARAM=auto"
 )
 
-echo Starting Automated 2D Cinematic Documentary Production...
-if "%OUTPUT_MP4%"=="" (
-    "%PYTHON_EXE%" "%PROJECT_DIR%src\auto_produce.py" --audio "%AUDIO_INPUT%" --lang "%LANG_PARAM%"
+if "%FIRST_INPUT:~-5%"==".json" (
+    set "CMD_ARGS=--storyboard "%FIRST_INPUT%" --lang "%LANG_PARAM%""
+) else if "%FIRST_INPUT:~-3%"==".py" (
+    set "CMD_ARGS=--script "%FIRST_INPUT%" --lang "%LANG_PARAM%""
 ) else (
-    "%PYTHON_EXE%" "%PROJECT_DIR%src\auto_produce.py" --audio "%AUDIO_INPUT%" --output "%OUTPUT_MP4%" --lang "%LANG_PARAM%"
+    set "CMD_ARGS=--audio "%FIRST_INPUT%" --lang "%LANG_PARAM%""
 )
+
+if not "%OUTPUT_MP4%"=="" (
+    set "CMD_ARGS=%CMD_ARGS% --output "%OUTPUT_MP4%""
+)
+if not "%EXTRA_PARAM%"=="" (
+    if "%EXTRA_PARAM:~-5%"==".json" (
+        set "CMD_ARGS=%CMD_ARGS% --storyboard "%EXTRA_PARAM%""
+    ) else if "%EXTRA_PARAM:~-3%"==".py" (
+        set "CMD_ARGS=%CMD_ARGS% --script "%EXTRA_PARAM%""
+    )
+)
+
+echo Starting Automated 2D Cinematic Documentary Production...
+"%PYTHON_EXE%" "%PROJECT_DIR%src\auto_produce.py" %CMD_ARGS%
 
 if %ERRORLEVEL% equ 0 (
     echo [SUCCESS] Production completed successfully!

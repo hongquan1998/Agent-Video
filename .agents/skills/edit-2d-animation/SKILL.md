@@ -68,10 +68,18 @@ python "d:\Data\Agent Video\src\auto_produce.py" --audio "d:\Data\Agent Video\au
 
 The codebase is organized into clean, reusable modules preserved for future productions:
 
-- **`src/auto_produce.py`**: Turnkey master entry point for automated voice-to-video production with automatic language detection and duration scaling.
+- **`src/assets_library.py`**: Core 2D vector & procedural animation library:
+  * Hierarchical skeletal rigging (`BoneNode`, `ActorRig`).
+  * Rig builders (`RigBuilder`): human rigs (diver, explorer, swimmer, civilian, casual, officer, machinist), aquatic creatures (shark, orca, whale), animals (wolf, bear, bird), and vessels (submersible, research boat).
+  * Procedural motion solvers (`ProceduralMotion`): walk, run, sit, type at desk, talk, inspect, swim, spine undulation, wing flap, vessel cruise.
+  * Reusable parallax environments (`EnvironmentRenderer`): cozy workspace at night, crossroad horizon, blueprint grid, historical journal card, underwater cross-section, mountain forest.
+  * Technical HUD & Infographics (`HUDRenderer`): scale wireframe, reticle, percent donut gauge, callout pin, rubber stamp, subtitle box, lower third, milestone badge.
+  * Master Storyboard Engine (`StoryboardRunner`): interprets JSON storyboards (`storyboards/<name>.json`) and renders full videos without manual animation code.
+- **`src/auto_produce.py`**: Turnkey master entry point for automated voice-to-video production with automatic language detection, duration scaling, Storyboard JSON auto-dispatch, and custom script support.
+- **`src/render_tuoi32_animation.py`**: Life reflection & documentary animation script for "Tuổi 32", demonstrating full integration with `assets_library.py`.
 - **`src/localization.py`**: Centralized language dictionary and font mapping for Vietnamese, English, and other languages.
 - **`src/components.py`**: Sargo-class fleet submarine hull, watertight oval door with dogging lugs, multi-layer ocean waves, vignette, and vector primitives.
 - **`src/art_assets.py`**: Lieutenant Oliver Naquin portrait with chiaroscuro rim lighting and emotional expressions, submarine control room, sound-powered bulkhead telephone station, and flooded diesel engine room.
-- **`src/generate_sfx.py`**: Procedural sound design engine synthesizing 13 synchronized SFX layers.
+- **`src/generate_sfx.py`**: Procedural sound design engine synthesizing synchronized SFX layers.
 - **`src/render_cinematic_animation.py`**: Language-adaptive PyCairo master scene renderer and FFmpeg video pipeline.
-- **`produce.bat` / `produce.ps1`**: Fast one-click launchers for Windows.
+- **`produce.bat` / `produce.ps1`**: Fast one-click launchers for Windows supporting voiceovers, Storyboard JSONs, and custom scripts.

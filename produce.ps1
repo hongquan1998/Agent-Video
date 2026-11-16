@@ -1,5 +1,5 @@
 param (
-    [Parameter(Mandatory=$true, Position=0)]
+    [Parameter(Position=0)]
     [string]$Audio,
 
     [Parameter(Position=1)]
@@ -7,6 +7,11 @@ param (
 
     [Parameter(Position=2)]
     [string]$Lang = "auto",
+
+    [Parameter(Position=3)]
+    [string]$Storyboard,
+
+    [string]$Script,
 
     [switch]$PreviewOnly,
 
@@ -27,9 +32,18 @@ if (-not (Test-Path $PythonExe)) {
 
 $ScriptPath = Join-Path $ProjectDir "src\auto_produce.py"
 
-$ArgsList = @("--audio", $Audio, "--fps", $Fps, "--lang", $Lang)
+$ArgsList = @("--fps", $Fps, "--lang", $Lang)
+if ($Audio) {
+    $ArgsList += @("--audio", $Audio)
+}
 if ($Output) {
     $ArgsList += @("--output", $Output)
+}
+if ($Storyboard) {
+    $ArgsList += @("--storyboard", $Storyboard)
+}
+if ($Script) {
+    $ArgsList += @("--script", $Script)
 }
 if ($PreviewOnly) {
     $ArgsList += "--preview-only"

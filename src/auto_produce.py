@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import shutil
 import re
+import importlib.util
 
 # Ensure local imports from src work properly
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +14,10 @@ if CURRENT_DIR not in sys.path:
 from generate_sfx import generate_sfx_track
 from render_cinematic_animation import render_cinematic_video, generate_previews
 from localization import get_font_for_lang, SCENE_LOCALIZATIONS
+from assets_library import (
+    StoryboardRunner, render_storyboard_video, generate_storyboard_previews,
+    SceneRunner, RigBuilder, ProceduralMotion, EnvironmentRenderer, HUDRenderer
+)
 
 def setup_environment():
     """Ensure ffmpeg, ffprobe, and python paths are in os.environ['PATH']"""
@@ -89,31 +94,60 @@ def probe_audio_duration(audio_file):
     print("[Warning] Could not accurately determine duration, using default 81.9s")
     return 81.9
 
-def auto_produce(audio_path, output_mp4=None, sfx_path=None, fps=30, lang="auto", preview_only=False):
+def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="auto", preview_only=False, storyboard_path=None, script_path=None):
     """
     Master automated turnkey pipeline:
     Voice Audio In -> Language Detection -> Duration Probe -> Synced SFX Generation -> PyCairo 1080p Render -> FFmpeg Audio Mix -> MP4 Out
+    Tích hợp thư viện đồ họa vector procedural assets_library.py (hỗ trợ Storyboard JSON và Script mở rộng).
     """
     setup_environment()
     
     project_root = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
     
-    if not os.path.isabs(audio_path) and not os.path.exists(audio_path):
+    if audio_path and not os.path.isabs(audio_path) and not os.path.exists(audio_path):
         alt_path = os.path.join(project_root, audio_path)
         if os.path.exists(alt_path):
             audio_path = alt_path
 
-    if not os.path.exists(audio_path):
+    if audio_path and not os.path.exists(audio_path):
         raise FileNotFoundError(f"Voiceover audio file not found: {audio_path}")
 
     # Determine language
     if not lang or lang.lower() == "auto":
-        target_lang = detect_language_from_path(audio_path, fallback="vi")
+        target_lang = detect_language_from_path(audio_path, fallback="vi") if audio_path else "vi"
     else:
         target_lang = lang.lower()
     
+    base_name = os.path.splitext(os.path.basename(audio_path))[0] if audio_path else (
+        os.path.splitext(os.path.basename(storyboard_path))[0] if storyboard_path else "tuoi32"
+    )
+
+    # Auto-detect storyboard if not specified
+    if not storyboard_path and not script_path and audio_path:
+        candidate_sb = [
+            os.path.join(os.path.dirname(audio_path), f"{base_name}.json"),
+            os.path.join(project_root, "storyboards", f"{base_name}.json"),
+            os.path.join(project_root, "audio", f"{base_name}.json"),
+        ]
+        for csb in candidate_sb:
+            if os.path.exists(csb):
+                storyboard_path = csb
+                print(f"[*] Tự động phát hiện Storyboard JSON: {storyboard_path}")
+                break
+
+    # Auto-detect custom render script if not specified
+    if not storyboard_path and not script_path and audio_path:
+        candidate_scripts = [
+            os.path.join(project_root, "src", f"render_{base_name}_animation.py"),
+            os.path.join(project_root, "src", f"render_{base_name}.py"),
+        ]
+        for csc in candidate_scripts:
+            if os.path.exists(csc):
+                script_path = csc
+                print(f"[*] Tự động phát hiện Script render riêng: {script_path}")
+                break
+
     if not output_mp4:
-        base_name = os.path.splitext(os.path.basename(audio_path))[0]
         output_mp4 = os.path.join(project_root, "output", f"{base_name}_{target_lang}_cinematic.mp4")
         
     if not sfx_path:
@@ -128,24 +162,50 @@ def auto_produce(audio_path, output_mp4=None, sfx_path=None, fps=30, lang="auto"
     print("=====================================================================")
     print("      AUTOMATED 2D CINEMATIC DOCUMENTARY ANIMATION PIPELINE         ")
     print("=====================================================================")
-    print(f"[*] Voiceover Audio : {audio_path}")
+    print(f"[*] Voiceover Audio : {audio_path or '(Không có file voice - Chế độ Storyboard đồ họa)'}")
     print(f"[*] Visual Language : {target_lang.upper()} (Font: {font_name})")
     print(f"[*] Target MP4      : {output_mp4}")
     print(f"[*] SFX Track       : {sfx_path}")
     print(f"[*] Frame Rate      : {fps} FPS")
+    if storyboard_path:
+        print(f"[*] Engine Mode     : Storyboard JSON (src/assets_library.py)")
+        print(f"[*] Storyboard File : {storyboard_path}")
+    elif script_path:
+        print(f"[*] Engine Mode     : Custom Script ({script_path})")
+    else:
+        print(f"[*] Engine Mode     : Built-in Cinematic Renderer (render_cinematic_animation.py)")
 
     # Step 1: Probe Audio Duration
-    print("\n--- [Step 1/4] Probing Audio Duration ---")
-    duration = probe_audio_duration(audio_path)
-    print(f"[+] Audio Duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+    print("\n--- [Step 1/4] Probing Duration ---")
+    if audio_path:
+        duration = probe_audio_duration(audio_path)
+        print(f"[+] Audio Duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+    elif storyboard_path:
+        temp_runner = StoryboardRunner(storyboard_path)
+        duration = temp_runner.total_duration
+        print(f"[+] Storyboard Duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+    else:
+        duration = 81.9
+        print(f"[+] Default Duration: {duration:.2f} seconds")
 
     # Step 2: Generate Synchronized SFX Track
     print("\n--- [Step 2/4] Synthesizing Synchronized Foley & Ambiance SFX ---")
     generate_sfx_track(duration=duration, output_path=sfx_path)
 
     # Step 3: Generate Preview Keyframe Plates in Target Language
-    print(f"\n--- [Step 3/4] Generating Cinematic Preview Keyframes ({target_lang.upper()}) ---")
-    generate_previews(output_dir=output_dir, total_duration=duration, fps=fps, lang=target_lang)
+    print(f"\n--- [Step 3/4] Generating Preview Keyframes ({target_lang.upper()}) ---")
+    if storyboard_path:
+        generate_storyboard_previews(storyboard_path, output_dir=output_dir, fps=fps, lang=target_lang)
+    elif script_path:
+        spec = importlib.util.spec_from_file_location("custom_render_module", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        if hasattr(mod, "generate_previews"):
+            mod.generate_previews(output_dir=output_dir, total_duration=duration, fps=fps, lang=target_lang)
+        else:
+            print("[Info] Custom script does not define generate_previews; skipping preview step.")
+    else:
+        generate_previews(output_dir=output_dir, total_duration=duration, fps=fps, lang=target_lang)
 
     if preview_only:
         print("\n[Preview Mode] Previews generated. Skipping video encoding.")
@@ -153,14 +213,41 @@ def auto_produce(audio_path, output_mp4=None, sfx_path=None, fps=30, lang="auto"
 
     # Step 4: Render Full 1080p 30fps Video and Pipe to FFmpeg
     print(f"\n--- [Step 4/4] Rendering 2D Vector Animation ({target_lang.upper()}) & Piping to FFmpeg ---")
-    final_video = render_cinematic_video(
-        voiceover_file=audio_path,
-        sfx_file=sfx_path,
-        output_mp4=output_mp4,
-        duration=duration,
-        fps=fps,
-        lang=target_lang
-    )
+    if storyboard_path:
+        final_video = render_storyboard_video(
+            storyboard_or_file=storyboard_path,
+            voiceover_file=audio_path,
+            sfx_file=sfx_path,
+            output_mp4=output_mp4,
+            duration=duration,
+            fps=fps,
+            lang=target_lang
+        )
+    elif script_path:
+        spec = importlib.util.spec_from_file_location("custom_render_module", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        render_fn = getattr(mod, "render_cinematic_video", getattr(mod, "render_video", None))
+        if render_fn:
+            final_video = render_fn(
+                voiceover_file=audio_path,
+                sfx_file=sfx_path,
+                output_mp4=output_mp4,
+                duration=duration,
+                fps=fps,
+                lang=target_lang
+            )
+        else:
+            raise AttributeError(f"Custom script {script_path} must define render_cinematic_video(...) or render_video(...)")
+    else:
+        final_video = render_cinematic_video(
+            voiceover_file=audio_path,
+            sfx_file=sfx_path,
+            output_mp4=output_mp4,
+            duration=duration,
+            fps=fps,
+            lang=target_lang
+        )
 
     # Verification
     if os.path.exists(final_video):
@@ -180,22 +267,29 @@ def auto_produce(audio_path, output_mp4=None, sfx_path=None, fps=30, lang="auto"
     return final_video
 
 def main():
-    parser = argparse.ArgumentParser(description="Automated Voice-to-Video 2D Cinematic Documentary Pipeline")
-    parser.add_argument("--audio", "-a", required=True, help="Path to input voiceover audio file (MP3, WAV, etc.)")
+    parser = argparse.ArgumentParser(description="Automated Voice-to-Video 2D Cinematic Documentary Pipeline (PyCairo & assets_library)")
+    parser.add_argument("--audio", "-a", default=None, help="Path to input voiceover audio file (MP3, WAV, etc.)")
     parser.add_argument("--output", "-o", default=None, help="Path to output MP4 file")
     parser.add_argument("--sfx", "-s", default=None, help="Path to generated SFX WAV file")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second (default: 30)")
     parser.add_argument("--lang", "-l", default="auto", help="Language for on-screen text/HUD (e.g., vi, en, or auto)")
+    parser.add_argument("--storyboard", "-sb", default=None, help="Path to JSON storyboard file (powered by assets_library.py)")
+    parser.add_argument("--script", "-sc", default=None, help="Path to custom Python render script")
     parser.add_argument("--preview-only", action="store_true", help="Generate preview plates only")
     
     args = parser.parse_args()
+    if not args.audio and not args.storyboard and not args.script:
+        parser.error("Cần cung cấp ít nhất một trong các tham số: --audio, --storyboard, hoặc --script.")
+
     auto_produce(
         audio_path=args.audio,
         output_mp4=args.output,
         sfx_path=args.sfx,
         fps=args.fps,
         lang=args.lang,
-        preview_only=args.preview_only
+        preview_only=args.preview_only,
+        storyboard_path=args.storyboard,
+        script_path=args.script
     )
 
 if __name__ == "__main__":
