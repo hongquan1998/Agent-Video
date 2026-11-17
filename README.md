@@ -1,10 +1,12 @@
 # Quy Trình Dựng Video Hoạt Họa 2D Tài Liệu Điện Ảnh Tự Động (Turnkey Automated Pipeline)
 
-Dự án này đã được tối ưu và đóng gói hoàn chỉnh thành một **Hệ thống dựng video tự động từ file voice đa ngôn ngữ**. 
+Dự án này là hệ thống **Dựng video tài liệu hoạt họa 2D điện ảnh tự động từ file voice đa ngôn ngữ**, ứng dụng kiến trúc kết hợp **AI Concept Art Generator + PyCairo Compositor Engine**. 
 
 > [!IMPORTANT]
-> **Quy Tắc Ngôn Ngữ Đồng Bộ (Voice tiếng nào -> Video tiếng đó)**:
-> Hệ thống sẽ tự động nhận diện ngôn ngữ của giọng đọc voiceover để hiển thị toàn bộ tiêu đề, thông số kỹ thuật (HUD), nhãn điều khiển và phụ đề trên video bằng chính ngôn ngữ đó (Voice Tiếng Việt -> Video Tiếng Việt; Voice Tiếng Anh -> Video Tiếng Anh; hoặc bất kỳ ngôn ngữ nào).
+> **Bộ Tiêu Chuẩn Sản Xuất Mới (Cinematic Hybrid Standard)**:
+> 1. **Tuyệt đối không làm slide PowerPoint**: Toàn bộ video là các cảnh hoạt họa chuyển động sống động với tranh minh họa 2D vector điện ảnh 16:9 sắc nét, máy quay dolly zoom/pan, khói bụi, ánh sáng thể tích và các thành phần giao diện tương tác thật (màn hình CRT, đồng hồ đếm ngược, hộp thoại popup, dấu mộc va đập).
+> 2. **Voice tiếng nào -> Video tiếng đó**: Đồng bộ 100% ngôn ngữ hiển thị với file voice, sử dụng chuẩn font `Segoe UI` để không bao giờ bị lỗi dấu hay ô vuông Unicode.
+> 3. **Phân tách bố cục hoàn hảo**: Nhãn huy hiệu (Badge) luôn cách tiêu đề chính tối thiểu >= 45px; phụ đề nổi dạng kính mờ (glassmorphic pill) đặt tại đáy màn hình không che khuất hình ảnh.
 
 ---
 
@@ -14,67 +16,40 @@ Dự án này đã được tối ưu và đóng gói hoàn chỉnh thành một
 Chỉ cần gửi hoặc tải lên file voice bất kỳ và nói:
 > *"Dựng video từ file voice này cho tôi"*
 
-AI Agent sẽ tự động nhận diện ngôn ngữ của voice, phân tích độ dài và kích hoạt quy trình sản xuất tự động.
+AI Agent sẽ tự động phân tích độ dài voice, tạo bộ tranh minh họa điện ảnh, kích hoạt track SFX đồng bộ và xuất video MP4 Full HD hoàn chỉnh.
 
 ### Cách B: Chạy thủ công trên máy tính
-Mở CMD hoặc PowerShell tại thư mục dự án và chạy:
+Mở CMD hoặc PowerShell tại thư mục dự án:
 
 ```bat
-:: Cách 1: Dựng từ file voice (tự động nhận diện hoặc chỉ định ngôn ngữ)
-produce.bat "path\to\voice.mp3" "" "vi"
-
-:: Cách 2: Dựng từ file kịch bản Storyboard JSON (sử dụng assets_library.py)
-produce.bat "storyboards\tuoi32_storyboard.json"
-
-:: Cách 3: Kết hợp Voiceover + Storyboard JSON
-produce.bat "path\to\voice.mp3" "" "vi" "storyboards\tuoi32_storyboard.json"
+:: Dựng từ file voice (tự động nhận diện kịch bản và ngôn ngữ)
+produce.bat "audio\dzogame_voice.mp3" "" "vi"
 ```
 
 Hoặc dùng PowerShell:
 ```powershell
-# Dựng từ voiceover
-.\produce.ps1 -Audio "audio\voice.mp3" -Lang "vi"
-
-# Dựng từ Storyboard JSON (assets_library)
-.\produce.ps1 -Storyboard "storyboards\tuoi32_storyboard.json"
-
-# Xem trước ảnh mẫu (Preview Only)
-.\produce.ps1 -Storyboard "storyboards\tuoi32_storyboard.json" -PreviewOnly
+.\produce.ps1 -Audio "audio\dzogame_voice.mp3" -Lang "vi"
 ```
 
 ---
 
 ## 2. Kiến Trúc Các Thành Phần Dùng Chung (`src/`)
 
-Toàn bộ tài nguyên và mã nguồn đã được module hóa để tái sử dụng vĩnh viễn:
-
 | Tệp / Thư mục | Vai trò |
 | :--- | :--- |
-| **`src/layout_validator.py`** | **Bộ Kiểm Định Bố Cục & Phông Chữ Tự Động (Pre-Render Quality Gate)**: Tự động chạy trước mọi tiến trình render video. Quét và khử lỗi ký tự lạ Unicode (tránh lỗi ô vuông `[]`), kiểm tra độ rộng văn bản chống tràn khung (`draw_safe_text`), kiểm soát khoảng cách an toàn giữa nhân vật và hộp thoại (tránh che khuất), đồng thời cách ly đường vẽ PyCairo (`ctx.new_sub_path()`) để loại bỏ vệt nối lạ. |
-| **`src/assets_library.py`** | **Thư viện Vector 2D & Chuyển Động Procedural Cốt Lõi**: Hệ thống xương phân cấp (`BoneNode`, `ActorRig`), bộ tạo Rig phong phú (`RigBuilder`: thợ lặn, nhà thám hiểm, nhân vật đời thường, sĩ quan, thú, tàu, cá mập...), bộ giải chuyển động (`ProceduralMotion`: đi bộ, ngồi làm việc, gõ phím, bơi, nói chuyện...), môi trường Parallax (`EnvironmentRenderer`: văn phòng làm việc ấm áp, đường chân trời rực rỡ, mặt cắt đại dương, lưới blueprint, sổ nhật ký...) và các thành phần Infographic HUD (`HUDRenderer`: thước đo tỉ lệ, kính ngắm, gauge đo phần trăm, callout pin, con dấu đóng, phụ đề nổi, bảng tên lower third). Cung cấp `StoryboardRunner` để dựng video từ file JSON mà không cần viết code animation thủ công! |
-| **`src/auto_produce.py`** | **Bộ điều khiển trung tâm tự động hóa**: Nhận file voice và/hoặc file storyboard JSON, đo thời lượng chính xác qua `ffprobe`, tự động chọn ngôn ngữ, kích hoạt tạo SFX, render PyCairo 1080p và xuất file MP4. Hỗ trợ chuyển đổi mượt mà giữa chế độ Storyboard JSON và Script tùy biến. |
-| **`src/render_tuoi32_animation.py`** | **Mẫu kịch bản video hoạt họa "Tuổi 32 - Bước Ngoặt Trưởng Thành"**: Sử dụng 100% tài nguyên từ `assets_library.py`, minh họa rõ nét cách kết hợp phòng làm việc đêm, bản đồ nội lực và sải bước ra chân trời. |
-| **`src/localization.py`** | **Bộ từ điển & Quản lý đa ngôn ngữ**: Quản lý toàn bộ văn bản hiển thị trên video cho các ngôn ngữ (Tiếng Việt `vi`, Tiếng Anh `en`...) và tự động map font chữ chuẩn (`Segoe UI` cho VI/EN không lỗi dấu). |
-| **`src/art_assets.py`** | **Thư viện Đồ Họa Vector Nghệ Thuật Đa Dụng (Chiaroscuro & Environments)**: Cung cấp bộ tạo chân dung nhân vật bán thân (`draw_character_portrait`) với ánh sáng Chiaroscuro tùy biến trang phục (vest doanh nhân, thường phục, đồng phục, áo thợ máy) và biểu cảm linh hoạt (kiên định, suy ngẫm, kinh ngạc, tươi cười); hệ thống bối cảnh nội thất đa năng (`draw_room_interior`: phòng điều khiển, văn phòng hiện đại, phòng nghiên cứu, phân xưởng); trạm thiết bị phần cứng (`draw_terminal_station`: viễn thông, cụm đồng hồ đo); phân xưởng máy móc công nghiệp nặng (`draw_machinery_bay`). Đi kèm các wrapper tương thích ngược. |
-| **`src/components.py`** | **Thư viện Thành Phần Vector 2D Đa Dụng (General-Purpose Vector Components)**: Hình học nguyên thủy (`rounded_rect`, `draw_circle`, `draw_capsule`, `draw_star`, `draw_polygon`, `draw_dashed_line`); hiệu ứng ánh sáng điện ảnh (`draw_vignette`, `draw_cinematic_bars` letterbox, `draw_particles_floating` hạt bụi sáng, `draw_volumetric_light_cone`, `draw_radial_glow`); các thẻ giao diện & Infographic (`draw_card_panel`, `draw_badge`, `draw_progress_bar`, `draw_gauge_arc`, `draw_crosshair_reticle`); cấu trúc tham số hóa (`draw_submersible_or_vessel`, `draw_bulkhead_or_vault_door`). |
-| **`src/generate_sfx.py`** | **Bộ Tổng Hợp Âm Thanh Thủ Tục Đa Năng (Procedural Sound Design Engine)**: Hệ thống tổng hợp âm thanh Stereo 44.1kHz thuần toán học (NumPy). Cung cấp các hàm nguyên bản (`synth_sine`, `synth_colored_noise` pink/brown/white, `synth_whoosh`, `synth_impact`, `synth_bell_chime`) và bộ tạo track hoàn chỉnh `generate_sfx_track(...)` với đa dạng chủ đề (`cinematic_ambient` đệm nhạc êm, mưa rơi, tích tắc đồng hồ; `suspense_documentary` hồi hộp, sóng biển, động cơ; `industrial` máy móc; `auto` tự nhận diện) cùng hỗ trợ cue tùy biến. |
-| **`src/render_cinematic_animation.py`** | **Bộ engine đồ họa vector 2D (Tài liệu USS Squalus)**: Chia khung hình, xử lý ngôn ngữ động theo tham số `lang` và xuất trực tiếp luồng BGR vào FFmpeg. |
-| **`produce.bat` / `produce.ps1`** | **Script khởi chạy nhanh**: Tự động cấu hình biến môi trường Python 3.12 và FFmpeg trên Windows, hỗ trợ chạy cả voice lẫn storyboard JSON. |
+| **`art/`** | **Kho Tranh Minh Họa Nền Điện Ảnh (1080p Art Plates)**: Chứa các tác phẩm tranh vẽ 2D vector điện ảnh tỉ lệ 16:9 chất lượng cao làm phông nền cho từng phân cảnh (phòng nét cỏ, data center, kiếm khách trên đỉnh núi, cỗ máy bào tiền...). |
+| **`src/render_dzogame_voice_animation.py`** | **Mẫu Kịch Bản Render Chuẩn Mực Cao Nhất (Master Template)**: Minh họa cách tích hợp hoàn chỉnh: nạp ImageSurface, điều khiển máy quay dolly zoom mượt mà, tạo hạt sáng/khói/hơi nước động, hiển thị đồng hồ đếm ngược CRT, hộp thoại popup và xuất trực tiếp sang FFmpeg. |
+| **`src/generate_sfx.py`** | **Bộ Tổng Hợp Âm Thanh Thủ Tục Đa Năng (Procedural SFX Engine)**: Tổng hợp âm thanh Stereo 44.1kHz khớp chuẩn xác từng mili-giây với voiceover. Hỗ trợ đa dạng chủ đề: `gaming_documentary` (phím cơ, còi đếm ngược, tiếng chập điện ngắt kết nối, chuông tái sinh, cỗ máy bào tiền), `suspense_documentary`, `cinematic_ambient` và `industrial`. |
+| **`src/layout_validator.py`** | **Bộ Kiểm Định Bố Cục & Phông Chữ Tự Động (Quality Gate)**: Tự động chạy trước mọi tiến trình render video. Khử sạch ký tự lạ Unicode gây ô vuông `[]`, tự động ngắt dòng thông minh (`draw_safe_text`), kiểm soát khoảng cách an toàn chống che khuất nhân vật và cách ly đường vẽ PyCairo. |
+| **`src/localization.py`** | **Bộ Từ Điển & Quản Lý Đa Ngôn Ngữ**: Quản lý toàn bộ văn bản hiển thị cho Tiếng Việt (`vi`), Tiếng Anh (`en`...) và tự động map font chuẩn `Segoe UI`. |
+| **`src/auto_produce.py`** | **Bộ Điều Khiển Trung Tâm Tự Động Hóa**: Tự động đo thời lượng audio qua `ffprobe`, tự phát hiện custom render script trong `src/`, điều phối tạo SFX, chạy kiểm định layout, xuất 8 ảnh mẫu preview và render video MP4 hoàn chỉnh. |
+| **`produce.bat` / `produce.ps1`** | **Script khởi chạy nhanh**: Cấu hình tự động môi trường Python 3.12 và FFmpeg trên Windows. |
 
 ---
 
-## 3. Tiêu Chuẩn Nghệ Thuật Đã Được Thiết Lập (Style Guidelines)
+## 3. Thư Mục Lưu Trữ
 
-1. **Voice tiếng nào -> Chữ tiếng đó**: Đảm bảo 100% văn bản hiển thị trên màn hình đồng bộ tuyệt đối với giọng đọc của file voice.
-2. **Tập trung vào Kể chuyện hoạt họa (Animated Storytelling)**: Từng cảnh phim chuyển động sống động, có chiều sâu không gian, sương mù, góc máy camera lướt và rung lắc điện ảnh; không sử dụng slide tĩnh hay biểu đồ khô khan.
-3. **Độ phân giải & Tần số quét**: Chuẩn Full HD `1920x1080` ở `30 fps` mượt mà.
-4. **Hòa âm chuẩn Studio**: Tự động cân bằng âm lượng Giọng đọc (Voiceover: 100%) và Hiệu ứng âm thanh (SFX: 62%) để đảm bảo nghe rõ từng lời dẫn mà vẫn giữ được độ kịch tính, hùng tráng.
-5. **Bảo tồn nội dung gốc**: Giữ nguyên 100% kịch bản giọng đọc được cung cấp.
-6. **Kiểm Định Bố Cục & Phông Chữ Tự Động (Pre-Render Quality Gate)**: Quy trình tự động kiểm tra và xử lý toàn bộ lỗi Unicode (ô vuông), tràn viền thẻ, che khuất nhân vật và lỗi nối nét PyCairo trước khi render video, loại bỏ hoàn toàn nhu cầu can thiệp thủ công.
-
----
-
-## 4. Thư Mục Lưu Trữ
-- **`audio/`**: Nơi chứa các file voice đầu vào và file âm thanh SFX đồng bộ.
-- **`output/`**: Nơi xuất video hoàn chỉnh (`.mp4`) và các hình ảnh xem trước (`cinematic_vi_preview_*.png`, `cinematic_en_preview_*.png`).
-- **`.agents/skills/edit-2d-animation/`**: Bộ Skill tự động kích hoạt cho AI Agent khi bạn gửi file voice trong tương lai.
+- **`audio/`**: Nơi lưu trữ file voiceover đầu vào và các file âm thanh SFX đồng bộ (`<voice_name>_sfx.wav`).
+- **`art/`**: Nơi lưu trữ bộ tranh minh họa nền 1080p PNG cho từng phân cảnh.
+- **`output/`**: Nơi xuất video hoàn chỉnh (`.mp4`) và các hình ảnh xem trước keyframe (`dzogame_preview_*.png`).
+- **`.agents/skills/edit-2d-animation/`**: Bộ Skill được cập nhật tự động hướng dẫn AI Agent áp dụng quy trình chuẩn này vĩnh viễn cho mọi video tương lai.
