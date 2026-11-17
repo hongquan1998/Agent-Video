@@ -17,7 +17,7 @@ When the user uploads or provides **ANY voiceover audio file** (MP3, WAV, M4A, e
    - Nghiêm cấm hoàn toàn việc vẽ các khung thẻ chứa các gạch đầu dòng (`• ...`, `• ...`) trông giống slide thuyết trình khô khan.
    - Toàn bộ các phân cảnh phải là các cảnh phim hoạt họa sống động (Living Cinematic Sequences): sử dụng tranh vẽ minh họa điện ảnh tỉ lệ 16:9 sắc nét làm phông nền, kết hợp máy quay dolly zoom từ từ, ánh sáng thể tích, khói bụi bốc lên và các yếu tố giao diện tương tác thật (như màn hình CRT đếm ngược, hộp thoại thông báo, dấu mộc va đập).
 2. **Quy Trình Hybrid: Concept Art Plate + PyCairo Compositor**:
-   - Chia kịch bản voiceover thành các phân đoạn tự sự chính (6 - 10 cảnh).
+   - Chia kịch bản voiceover thành các phân đoạn tự sự chính (6 - 10 cảnh hoặc nhiều hơn tùy độ dài).
    - Với mỗi phân cảnh, tự động kích hoạt tạo tranh minh họa nền 16:9 (1920x1080) bằng `image-generator` với phong cách 2D vector điện ảnh (flat-vector anime documentary art, không chứa chữ text rác).
    - Lưu trữ tại `d:\Data\Agent Video\art\sceneX_<slug>.png`.
    - PyCairo nạp trực tiếp ImageSurface vào bộ nhớ và tạo chuyển động máy quay (Slow Dolly Zoom 1.0 -> 1.08, Parallax Pan), phủ lớp hạt bụi, vệt mưa, luồng sáng, khói thuốc và các hiệu ứng động đồng bộ thời gian thực.
