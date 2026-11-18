@@ -56,7 +56,7 @@ Sao chép file voice vào `d:\Data\Agent Video\audio\<voice_name>.<ext>`.
 
 ### Bước 2: Phân Tích Kịch Bản & Tạo Tranh Nền Điện Ảnh (Art Plates)
 1. Dùng `ffprobe` xác định thời lượng chính xác của audio.
-2. Phân tách kịch bản voiceover thành các phân cảnh tự sự (thường từ 6 - 8 cảnh).
+2. Phân tách kịch bản voiceover thành các phân cảnh tự sự (thường từ 6 - 8 cảnh hoặc nhiều hơn tùy theo thời lượng).
 3. Sử dụng `image-generator` để tạo tranh minh họa 2D vector điện ảnh 16:9 cho từng cảnh (không chứa chữ text trên ảnh), chuyển đổi về định dạng PNG 1080p và lưu vào `d:\Data\Agent Video\art\sceneX_<name>.png`.
 
 ### Bước 3: Tạo Render Script Kế Thừa Bộ Engine Mới
@@ -77,7 +77,7 @@ $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + 
 python "d:\Data\Agent Video\src\auto_produce.py" --audio "d:\Data\Agent Video\audio\<voice_name>.<ext>" --lang auto
 ```
 Quy trình tự động thực hiện:
-1. Tạo 8 ảnh mẫu xem trước (Preview Keyframe Plates) tại `d:\Data\Agent Video\output\`.
+1. Tạo các ảnh mẫu xem trước (Preview Keyframe Plates) tại `d:\Data\Agent Video\output\`.
 2. Kiểm tra trực quan ảnh mẫu để đảm bảo 100% không có lỗi bố cục.
 3. Render từng khung hình 1080p 30fps qua PyCairo, truyền trực tiếp stream BGR vào FFmpeg.
 4. Hòa âm Giọng đọc (Volume 1.0) và SFX (Volume 0.55) qua bộ lọc `amix`.
