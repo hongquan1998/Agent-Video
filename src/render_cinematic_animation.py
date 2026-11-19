@@ -689,6 +689,9 @@ def render_cinematic_video(voiceover_file, sfx_file, output_mp4, duration=81.9, 
     total_frames = int(duration * fps)
     os.makedirs(os.path.dirname(output_mp4), exist_ok=True)
 
+    has_voice = bool(voiceover_file and os.path.exists(voiceover_file))
+    has_sfx = bool(sfx_file and os.path.exists(sfx_file))
+
     ffmpeg_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo",
@@ -697,12 +700,39 @@ def render_cinematic_video(voiceover_file, sfx_file, output_mp4, duration=81.9, 
         "-pix_fmt", "bgr24",
         "-r", str(fps),
         "-i", "-", # Stdin video stream
-        "-i", voiceover_file,
-        "-i", sfx_file,
-        "-filter_complex",
-        "[1:a]volume=1.0[vocal]; [2:a]volume=0.62[sfx]; [vocal][sfx]amix=inputs=2:duration=longest[aout]",
-        "-map", "0:v",
-        "-map", "[aout]",
+    ]
+
+    if has_voice and has_sfx:
+        ffmpeg_cmd += [
+            "-i", voiceover_file,
+            "-i", sfx_file,
+            "-filter_complex",
+            "[1:a]volume=1.0[vocal]; [2:a]volume=0.62[sfx]; [vocal][sfx]amix=inputs=2:duration=longest[aout]",
+            "-map", "0:v",
+            "-map", "[aout]",
+        ]
+    elif has_voice:
+        ffmpeg_cmd += [
+            "-i", voiceover_file,
+            "-map", "0:v",
+            "-map", "1:a",
+            "-c:a", "aac",
+            "-b:a", "192k",
+        ]
+    elif has_sfx:
+        ffmpeg_cmd += [
+            "-i", sfx_file,
+            "-map", "0:v",
+            "-map", "1:a",
+            "-c:a", "aac",
+            "-b:a", "192k",
+        ]
+    else:
+        ffmpeg_cmd += [
+            "-map", "0:v",
+        ]
+
+    ffmpeg_cmd += [
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-preset", "fast",

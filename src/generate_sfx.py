@@ -77,15 +77,19 @@ def generate_sfx_track(
     duration=DEFAULT_DURATION,
     output_path=r"d:\Data\Agent Video\audio\sfx_track.wav",
     theme="auto",
-    cues=None
+    cues=None,
+    include_noise=False
 ):
     """
     Tạo track âm thanh SFX hoàn chỉnh chuẩn Stereo 44.1kHz đồng bộ tuyệt đối với thời lượng video.
     - theme:
       * 'auto': Tự động phân tích theo đường dẫn hoặc kịch bản
-      * 'cinematic_ambient' / 'contemplative': Triết lý, cuộc sống, học tập, công nghệ (đệm nhạc êm, mưa, đồng hồ, gõ phím, chuông)
-      * 'suspense_documentary' / 'historical': Hồi hộp, lịch sử, thử thách, sinh tồn (tiếng sóng, động cơ, rơ-le, còi báo, nhịp tim)
+      * 'cinematic_ambient' / 'contemplative': Triết lý, cuộc sống, học tập, công nghệ (đệm nhạc êm, đồng hồ, chuông, whoosh)
+      * 'suspense_documentary' / 'historical': Hồi hộp, lịch sử, thử thách, sinh tồn (động cơ trầm, rơ-le, còi báo, nhịp tim)
       * 'industrial': Máy móc phân xưởng, động cơ, hơi nước, kim loại
+    - include_noise:
+      * False (mặc định): Tắt hoàn toàn tạp âm xèo xèo/rào rào (pink/brown noise), giữ âm thanh trong trẻo, điện ảnh.
+      * True: Bật lại tạp âm mưa/sóng biển/room tone nếu người dùng yêu cầu.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     total_samples = int(SAMPLE_RATE * duration)
@@ -150,9 +154,10 @@ def generate_sfx_track(
             pan = 0.5 + 0.15 * math.sin(seg_idx * 1.3)
             add_stereo(c_st, sig * env * (1.0 - pan), sig * env * pan, gain=0.45)
 
-        # 2. Không gian mưa đêm / tiếng thở phòng (Room Ambience)
-        rain = synth_colored_noise(duration, color="pink", amp=0.08)
-        add_stereo(0.0, rain * 0.9, rain * 1.1, gain=0.35)
+        # 2. Không gian mưa đêm / tiếng thở phòng (Room Ambience) - Mặc định TẮT để loại bỏ tiếng xèo xèo
+        if include_noise:
+            rain = synth_colored_noise(duration, color="pink", amp=0.08)
+            add_stereo(0.0, rain * 0.9, rain * 1.1, gain=0.35)
 
         # 3. Đồng hồ tích tắc thiền định (1s/lần)
         tick_h = synth_sine(1800, 0.035, decay=0.006, amp=0.04)
@@ -179,10 +184,11 @@ def generate_sfx_track(
     # THEME B: SUSPENSE DOCUMENTARY / HISTORICAL (Tài liệu Hồi hộp & Thử thách)
     # --------------------------------------------------------------------------
     else:
-        # 1. Âm hưởng đại dương sâu & gió rít lạnh giá
-        ocean = synth_colored_noise(duration, color="brown", amp=0.15)
-        swell_mod = 0.6 + 0.4 * np.sin(2 * np.pi * 0.1 * np.linspace(0, duration, total_samples))
-        add_stereo(0.0, ocean * swell_mod, ocean * swell_mod, gain=0.75)
+        # 1. Âm hưởng đại dương sâu & gió rít lạnh giá - Mặc định TẮT để loại bỏ tiếng xèo xèo
+        if include_noise:
+            ocean = synth_colored_noise(duration, color="brown", amp=0.15)
+            swell_mod = 0.6 + 0.4 * np.sin(2 * np.pi * 0.1 * np.linspace(0, duration, total_samples))
+            add_stereo(0.0, ocean * swell_mod, ocean * swell_mod, gain=0.75)
 
         # 2. Động cơ Diesel công nghiệp nặng trầm thâm
         eng_len = int(min(duration, 45.0) * SAMPLE_RATE)

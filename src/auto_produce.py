@@ -95,7 +95,7 @@ def probe_audio_duration(audio_file):
     print("[Warning] Could not accurately determine duration, using default 81.9s")
     return 81.9
 
-def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="auto", preview_only=False, storyboard_path=None, script_path=None):
+def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="auto", preview_only=False, storyboard_path=None, script_path=None, no_sfx=False, include_noise=False):
     """
     Master automated turnkey pipeline:
     Voice Audio In -> Language Detection -> Duration Probe -> Synced SFX Generation -> PyCairo 1080p Render -> FFmpeg Audio Mix -> MP4 Out
@@ -151,12 +151,15 @@ def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="
     if not output_mp4:
         output_mp4 = os.path.join(project_root, "output", f"{base_name}_{target_lang}_cinematic.mp4")
         
-    if not sfx_path:
-        sfx_path = os.path.join(project_root, "audio", "sfx_track.wav")
+    if not no_sfx:
+        if not sfx_path:
+            sfx_path = os.path.join(project_root, "audio", "sfx_track.wav")
+        os.makedirs(os.path.dirname(sfx_path), exist_ok=True)
+    else:
+        sfx_path = None
 
     output_dir = os.path.dirname(output_mp4)
     os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.dirname(sfx_path), exist_ok=True)
 
     font_name = get_font_for_lang(target_lang)
 
@@ -166,7 +169,7 @@ def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="
     print(f"[*] Voiceover Audio : {audio_path or '(Không có file voice - Chế độ Storyboard đồ họa)'}")
     print(f"[*] Visual Language : {target_lang.upper()} (Font: {font_name})")
     print(f"[*] Target MP4      : {output_mp4}")
-    print(f"[*] SFX Track       : {sfx_path}")
+    print(f"[*] SFX Track       : {sfx_path or 'DISABLED (No SFX / Không âm thanh nền)'}")
     print(f"[*] Frame Rate      : {fps} FPS")
     if storyboard_path:
         print(f"[*] Engine Mode     : Storyboard JSON (src/assets_library.py)")
@@ -190,8 +193,11 @@ def auto_produce(audio_path=None, output_mp4=None, sfx_path=None, fps=30, lang="
         print(f"[+] Default Duration: {duration:.2f} seconds")
 
     # Step 2: Generate Synchronized SFX Track
-    print("\n--- [Step 2/5] Synthesizing Synchronized Foley & Ambiance SFX ---")
-    generate_sfx_track(duration=duration, output_path=sfx_path)
+    if not no_sfx:
+        print("\n--- [Step 2/5] Synthesizing Synchronized Foley & Ambiance SFX (No Noise/Xèo Xèo) ---")
+        generate_sfx_track(duration=duration, output_path=sfx_path, include_noise=include_noise)
+    else:
+        print("\n--- [Step 2/5] SFX Disabled (--no-sfx). Skipping SFX synthesis ---")
 
     # Step 3: Automated Typography & Layout Quality Gate (Pre-Render Validation)
     print(f"\n--- [Step 3/5] Automated Typography & Layout Quality Gate ({target_lang.upper()}) ---")
@@ -286,6 +292,8 @@ def main():
     parser.add_argument("--storyboard", "-sb", default=None, help="Path to JSON storyboard file (powered by assets_library.py)")
     parser.add_argument("--script", "-sc", default=None, help="Path to custom Python render script")
     parser.add_argument("--preview-only", action="store_true", help="Generate preview plates only")
+    parser.add_argument("--no-sfx", action="store_true", help="Vô hiệu hóa hoàn toàn âm thanh nền SFX (chỉ dùng voiceover gốc)")
+    parser.add_argument("--include-noise", action="store_true", help="Bật lại tạp âm phòng/mưa (mặc định đã tắt để chống xèo xèo)")
     
     args = parser.parse_args()
     if not args.audio and not args.storyboard and not args.script:
@@ -299,7 +307,9 @@ def main():
         lang=args.lang,
         preview_only=args.preview_only,
         storyboard_path=args.storyboard,
-        script_path=args.script
+        script_path=args.script,
+        no_sfx=args.no_sfx,
+        include_noise=args.include_noise
     )
 
 if __name__ == "__main__":

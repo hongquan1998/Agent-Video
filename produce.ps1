@@ -15,6 +15,8 @@ param (
 
     [switch]$PreviewOnly,
 
+    [switch]$NoSFX,
+
     [int]$Fps = 30
 )
 
@@ -47,6 +49,9 @@ if ($Script) {
 }
 if ($PreviewOnly) {
     $ArgsList += "--preview-only"
+}
+if ($NoSFX) {
+    $ArgsList += "--no-sfx"
 }
 
 Write-Host ">>> Starting Automated 2D Cinematic Documentary Production..." -ForegroundColor Cyan

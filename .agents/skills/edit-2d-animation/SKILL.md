@@ -32,12 +32,13 @@ When the user uploads or provides **ANY voiceover audio file** (MP3, WAV, M4A, e
      * Phụ đề phụ (Font 17 - 18) đặt ở `y = 210 - 225`.
    - **Vị trí các thẻ bổ trợ**: Đặt ở vùng dưới chân màn hình (`y = 730 - 840`), tách biệt hoàn toàn khỏi nhân vật và không bao giờ để kiếm/vật thể cắt ngang chữ.
    - **Hộp phụ đề nổi (Dynamic Subtitle Box)**: Đặt ở đáy màn hình (`y = 960`), có khung nền kính mờ đen mờ bo góc an toàn (`rgba(0.04, 0.06, 0.09, 0.88)`), không chạm thanh Letterbox (60px).
-5. **Thiết Kế Âm Thanh Đồng Bộ Thủ Tục (Procedural Foley SFX Track)**:
+5. **Thiết Kế Âm Thanh Đồng Bộ Thủ Tục Trong Trẻo (Zero Background Hiss / Khử Sạch Âm Thanh Xèo Xèo)**:
    - Tự động nhận diện chủ đề âm thanh qua `src/generate_sfx.py`:
      * `gaming_documentary`: Tiếng gõ phím phòng nét, còi đếm ngược máy chủ, tiếng chập điện ngắt kết nối, chuông tái sinh phượng hoàng, cơ khí nghiền tiền và tiếng đồng xu.
-     * `suspense_documentary`: Tiếng sóng ngầm đại dương, động cơ diesel, rơ-le điện, còi báo động lặn.
-     * `cinematic_ambient`: Hợp âm pad ấm áp, tiếng mưa rơi, tích tắc đồng hồ.
-   - Tự động tổng hợp file âm thanh nổi Stereo 44.1kHz khớp chuẩn xác từng mili-giây với voiceover.
+     * `suspense_documentary`: Động cơ diesel trầm ấm, rơ-le điện, còi báo động lặn (loại bỏ hoàn toàn tiếng sôi/xèo xèo của tạp âm đại dương).
+     * `cinematic_ambient`: Hợp âm pad ấm áp (Dm7, Fmaj7, Cmaj, Gmaj), tích tắc đồng hồ thiền định, chuông ngân và whoosh chuyển cảnh (loại bỏ hoàn toàn tiếng mưa/tạp âm phòng xèo xèo).
+   - Mặc định `include_noise=False`: Khử sạch 100% tiếng xèo xèo/rè/hiss của tạp âm pink/brown noise, cho âm thanh điện ảnh trong trẻo, tôn vinh giọng đọc người dẫn.
+   - Hỗ trợ cờ `--no-sfx` khi người dùng chỉ muốn giữ giọng đọc thuần túy (Voiceover Only).
 6. **Kiểm Định Tự Động Trước Khi Render (Pre-Render Quality Gate)**:
    - Tự động chạy `validate_and_audit_scenes` trước khi kích hoạt FFmpeg.
    - Tự động khử ký tự lạ Unicode gây ô vuông [].
@@ -68,13 +69,15 @@ Tạo `d:\Data\Agent Video\src\render_<voice_name>_animation.py`:
 - Danh sách `SUBTITLES = [(st, et, "text..."), ...]` đồng bộ từng câu thoại.
 
 ### Bước 4: Tạo Track Âm Thanh Đồng Bộ SFX
-Chạy `generate_sfx_track(duration=duration, output_path=sfx_path, theme="auto")` từ `src/generate_sfx.py`.
+Chạy `generate_sfx_track(duration=duration, output_path=sfx_path, theme="auto", include_noise=False)` từ `src/generate_sfx.py`. Âm thanh được khử sạch hoàn toàn tạp âm xèo xèo/rè rè, chỉ giữ lại hợp âm điện ảnh và hiệu ứng foley tinh tế. Nếu muốn loại bỏ hoàn toàn âm thanh nền, truyền cờ `--no-sfx`.
 
 ### Bước 5: Kiểm Định Bố Cục & Kết Xuất Video Hoàn Chỉnh
 Chạy qua lệnh master:
 ```powershell
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
 python "d:\Data\Agent Video\src\auto_produce.py" --audio "d:\Data\Agent Video\audio\<voice_name>.<ext>" --lang auto
+# Hoặc nếu muốn tắt hoàn toàn âm thanh nền SFX (chỉ giữ giọng đọc):
+# python "d:\Data\Agent Video\src\auto_produce.py" --audio "d:\Data\Agent Video\audio\<voice_name>.<ext>" --no-sfx
 ```
 Quy trình tự động thực hiện:
 1. Tạo các ảnh mẫu xem trước (Preview Keyframe Plates) tại `d:\Data\Agent Video\output\`.

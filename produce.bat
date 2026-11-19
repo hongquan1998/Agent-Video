@@ -52,6 +52,11 @@ if not "%EXTRA_PARAM%"=="" (
     )
 )
 
+for %%A in (%*) do (
+    if /i "%%~A"=="--no-sfx" set "CMD_ARGS=%CMD_ARGS% --no-sfx"
+    if /i "%%~A"=="-nosfx" set "CMD_ARGS=%CMD_ARGS% --no-sfx"
+)
+
 echo Starting Automated 2D Cinematic Documentary Production...
 "%PYTHON_EXE%" "%PROJECT_DIR%src\auto_produce.py" %CMD_ARGS%
 
